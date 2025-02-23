@@ -52,6 +52,11 @@
           "command": "llmcheckpoint.exportVersion",
           "when": "viewItem == version",
           "group": "inline"
+        },
+        {
+          "command": "llmcheckpoint.deleteVersion",
+          "when": "view == llmcheckpointVersions && viewItem == version",
+          "group": "inline"
         }
       ],
       "editor/title": [
@@ -111,6 +116,10 @@
         "command": "llmcheckpoint.refreshVersions",
         "title": "Refresh Versions",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "llmcheckpoint.deleteVersion",
+        "title": "Delete Version"
       }
     ],
     "keybindings": [

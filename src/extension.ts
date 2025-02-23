@@ -3,6 +3,7 @@ import { FileVersionDB } from './db';
 import { initializeDatabase } from './db/schema';
 import { VersionTreeProvider, exportVersionToFile, viewVersion, registerVersionProvider } from './versionTreeProvider';
 import { VersionRecord } from './db/schema';
+import { VersionTreeItem } from './versionTreeProvider';
 
 let fileVersionDB: FileVersionDB;
 let versionTreeProvider: VersionTreeProvider;
@@ -41,6 +42,11 @@ export async function activate(context: vscode.ExtensionContext) {
 				return viewVersion(version, fileVersionDB);
 			}),
 			vscode.commands.registerCommand('llmcheckpoint.exportVersion', exportVersion),
+			vscode.commands.registerCommand('llmcheckpoint.deleteVersion', (item: VersionTreeItem) => {
+				if (item.version) {
+					deleteVersion(item.version);
+				}
+			}),
 			vscode.commands.registerCommand('llmcheckpoint.refreshVersions', () => {
 				console.log('Refreshing versions view...');
 				versionTreeProvider.refresh();
@@ -89,8 +95,15 @@ export async function activate(context: vscode.ExtensionContext) {
 async function handleFileChange(uri: vscode.Uri) {
 	try {
 		console.log('Handling file change for:', uri.toString());
-		const relativePath = vscode.workspace.asRelativePath(uri);
 		const document = await vscode.workspace.openTextDocument(uri);
+		
+		
+		if (!document.isDirty) {
+			console.log('Document is not dirty, skipping version creation');
+			return;
+		}
+
+		const relativePath = vscode.workspace.asRelativePath(uri);
 		const content = document.getText();
 
 		
@@ -99,36 +112,28 @@ async function handleFileChange(uri: vscode.Uri) {
 			return;
 		}
 
-		console.log('Creating/updating file record for:', relativePath);
 		let file = fileVersionDB.getFile(relativePath);
 		if (!file) {
-			console.log('File not found in DB, creating new record');
 			file = fileVersionDB.createFile(relativePath);
 		}
 
 		
 		const versions = fileVersionDB.getFileVersions(file.id);
 		const latestVersion = versions[versions.length - 1];
-		
-		try {
+
+		if (latestVersion) {
 			
-			JSON.parse(JSON.stringify(content));
-			
-			if (latestVersion && latestVersion.content === content) {
-				console.log('Content unchanged, skipping version creation');
+			if (latestVersion.content === content) {
+				console.log('No actual changes detected, skipping version creation');
 				return;
 			}
-
-			console.log('Creating new version for file:', relativePath);
-			const version = fileVersionDB.createVersion(file.id, content);
-			console.log(`Created version ${version.version_number} for file:`, relativePath);
-			
-			versionTreeProvider.refresh();
-		} catch (jsonError) {
-			console.error('Error processing content:', jsonError);
-			vscode.window.showErrorMessage('Failed to process file content: Invalid format');
-			return;
 		}
+
+		console.log('Creating new version for file:', relativePath);
+		const version = fileVersionDB.createVersion(file.id, content);
+		console.log(`Created version ${version.version_number} for file:`, relativePath);
+		versionTreeProvider.refresh();
+
 	} catch (error) {
 		console.error('Error handling file change:', error);
 		vscode.window.showErrorMessage(`Failed to save version: ${error}`);
@@ -257,6 +262,17 @@ async function exportVersion(version: VersionRecord) {
 	}
 }
 
+async function deleteVersion(version: VersionRecord) {
+	try {
+		const edit = new vscode.WorkspaceEdit();
+		fileVersionDB.deleteVersion(version.id);
+		versionTreeProvider.refresh();
+		vscode.window.showInformationMessage(`Version ${version.version_number} deleted`);
+	} catch (error: any) {
+		const errorMessage = error?.message || 'Unknown error occurred';
+		vscode.window.showErrorMessage('Failed to delete version: ' + errorMessage);
+	}
+}
 
 export function deactivate() {
 	

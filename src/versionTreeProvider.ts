@@ -104,12 +104,7 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
                     label,
                     vscode.TreeItemCollapsibleState.None,
                     element.file,
-                    version,
-                    {
-                        command: 'llmcheckpoint.viewVersion',
-                        title: 'View Version',
-                        arguments: [version]
-                    }
+                    version
                 );
                 treeItem.description = description;
                 treeItem.contextValue = 'version';

@@ -146,4 +146,10 @@ export class FileVersionDB {
             version_number: result[0].values[0][4] as number
         };
     }
+
+    deleteVersion(versionId: number): void {
+        const stmt = this.db.prepare('DELETE FROM versions WHERE id = ?');
+        stmt.run([versionId]);
+        this.saveToFile();
+    }
 } 
