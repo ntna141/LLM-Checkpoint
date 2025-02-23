@@ -136,24 +136,49 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
 
 export async function exportVersionToFile(version: VersionRecord, filePath: string): Promise<void> {
     try {
-        console.log('Exporting version to file:', version);
+        console.log('Exporting version to file:', {
+            versionId: version.id,
+            versionNumber: version.version_number,
+            fileId: version.file_id,
+            contentLength: version.content?.length || 0,
+            targetPath: filePath
+        });
         
-        // Ensure the directory exists
-        const directory = path.dirname(filePath);
+        
+        if (!version.content) {
+            throw new Error('Version content is missing or undefined');
+        }
+
+        
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            throw new Error('No workspace folder found');
+        }
+
+        
+        const fullPath = vscode.Uri.joinPath(workspaceFolder.uri, filePath);
+        console.log('Full export path:', fullPath.fsPath);
+        
+        
+        const directory = path.dirname(fullPath.fsPath);
         await fs.promises.mkdir(directory, { recursive: true });
         
-        // Format the content with version info and timestamp
+        
         const content = `Version ${version.version_number} - ${new Date(version.timestamp).toLocaleString()}\n\n${version.content}`;
         
-        // Write the content to the specified file
-        await fs.promises.writeFile(filePath, content, 'utf8');
         
-        // Show success message
+        await fs.promises.writeFile(fullPath.fsPath, content, 'utf8');
+        
+        
         vscode.window.showInformationMessage(`Version exported successfully to ${filePath}`);
         console.log('Version exported successfully');
     } catch (error: any) {
-        console.error('Error exporting version:', error);
-        vscode.window.showErrorMessage(`Failed to export version: ${error.message}`);
+        console.error('Error details:', {
+            error: error.message,
+            stack: error.stack,
+            version: version,
+            filePath: filePath
+        });
         throw error;
     }
 }

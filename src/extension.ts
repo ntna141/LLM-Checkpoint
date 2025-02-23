@@ -4,6 +4,7 @@ import { initializeDatabase } from './db/schema';
 import { VersionTreeProvider, exportVersionToFile, viewVersion, registerVersionProvider } from './versionTreeProvider';
 import { VersionRecord } from './db/schema';
 import { VersionTreeItem } from './versionTreeProvider';
+import path from 'path';
 
 let fileVersionDB: FileVersionDB;
 let versionTreeProvider: VersionTreeProvider;
@@ -44,7 +45,13 @@ export async function activate(context: vscode.ExtensionContext) {
 				console.log('View command triggered with:', version);
 				return viewVersion(version, fileVersionDB);
 			}),
-			vscode.commands.registerCommand('llmcheckpoint.exportVersion', exportVersion),
+			vscode.commands.registerCommand('llmcheckpoint.exportVersion', (item: VersionTreeItem) => {
+				if (item.version) {
+					exportVersion(item.version);
+				} else {
+					vscode.window.showErrorMessage('No version information found');
+				}
+			}),
 			vscode.commands.registerCommand('llmcheckpoint.deleteVersion', (item: VersionTreeItem) => {
 				if (item.version) {
 					deleteVersion(item.version);
@@ -253,11 +260,21 @@ async function restoreVersion() {
 
 async function exportVersion(version: VersionRecord) {
 	try {
-		await exportVersionToFile(version, 'history_context.txt');
-		vscode.window.showInformationMessage('Version exported to history_context.txt');
+		const file = fileVersionDB.getFileById(version.file_id);
+		if (!file) {
+			throw new Error(`File not found for file_id: ${version.file_id}`);
+		}
+		
+		const exportPath = 'history_context.txt';
+		await exportVersionToFile(version, exportPath);
+		vscode.window.showInformationMessage(`Version exported to ${exportPath}`);
 	} catch (error: any) {
-		const errorMessage = error?.message || 'Unknown error occurred';
-		vscode.window.showErrorMessage('Failed to export version: ' + errorMessage);
+		console.error('Export error details:', {
+			error: error.message,
+			stack: error.stack,
+			version: version
+		});
+		vscode.window.showErrorMessage(`Failed to export version: ${error.message}`);
 	}
 }
 
