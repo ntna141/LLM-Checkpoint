@@ -45,6 +45,11 @@
           "command": "llmcheckpoint.deleteVersion",
           "when": "view == llmcheckpointVersions && viewItem == version",
           "group": "inline"
+        },
+        {
+          "command": "llmcheckpoint.exportVersion",
+          "when": "view == llmcheckpointVersions && viewItem == version",
+          "group": "inline"
         }
       ],
       "editor/title": [

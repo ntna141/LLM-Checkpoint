@@ -135,11 +135,27 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
 }
 
 export async function exportVersionToFile(version: VersionRecord, filePath: string): Promise<void> {
-    console.log('Exporting version to file:', version);
-    const historyContext = path.join(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '', 'history_context.txt');
-    const content = `Version ${version.version_number} - ${new Date(version.timestamp).toLocaleString()}\n\n${version.content}`;
-    await fs.promises.writeFile(historyContext, content, 'utf8');
-    console.log('Version exported successfully');
+    try {
+        console.log('Exporting version to file:', version);
+        
+        // Ensure the directory exists
+        const directory = path.dirname(filePath);
+        await fs.promises.mkdir(directory, { recursive: true });
+        
+        // Format the content with version info and timestamp
+        const content = `Version ${version.version_number} - ${new Date(version.timestamp).toLocaleString()}\n\n${version.content}`;
+        
+        // Write the content to the specified file
+        await fs.promises.writeFile(filePath, content, 'utf8');
+        
+        // Show success message
+        vscode.window.showInformationMessage(`Version exported successfully to ${filePath}`);
+        console.log('Version exported successfully');
+    } catch (error: any) {
+        console.error('Error exporting version:', error);
+        vscode.window.showErrorMessage(`Failed to export version: ${error.message}`);
+        throw error;
+    }
 }
 
 export async function viewVersion(version: VersionRecord, db: FileVersionDB): Promise<void> {
