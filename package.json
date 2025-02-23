@@ -18,19 +18,17 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "llmcheckpoint-explorer",
+          "id": "llmcheckpoint",
           "title": "LLM Checkpoint",
           "icon": "$(history)"
         }
       ]
     },
     "views": {
-      "llmcheckpoint-explorer": [
+      "llmcheckpoint": [
         {
-          "type": "tree",
           "id": "llmcheckpointVersions",
-          "name": "File Versions",
-          "contextualTitle": "LLM Checkpoint History"
+          "name": "Versions"
         }
       ]
     },
@@ -44,16 +42,6 @@
       ],
       "view/item/context": [
         {
-          "command": "llmcheckpoint.viewVersion",
-          "when": "viewItem == version",
-          "group": "inline"
-        },
-        {
-          "command": "llmcheckpoint.exportVersion",
-          "when": "viewItem == version",
-          "group": "inline"
-        },
-        {
           "command": "llmcheckpoint.deleteVersion",
           "when": "view == llmcheckpointVersions && viewItem == version",
           "group": "inline"
@@ -62,25 +50,7 @@
       "editor/title": [
         {
           "command": "llmcheckpoint.saveVersion",
-          "group": "navigation",
-          "when": "resourceScheme == file"
-        },
-        {
-          "command": "llmcheckpoint.showVersionHistory",
-          "group": "navigation",
-          "when": "resourceScheme == file"
-        }
-      ],
-      "editor/context": [
-        {
-          "command": "llmcheckpoint.saveVersion",
-          "group": "llmcheckpoint@1",
-          "when": "resourceScheme == file"
-        },
-        {
-          "command": "llmcheckpoint.showVersionHistory",
-          "group": "llmcheckpoint@2",
-          "when": "resourceScheme == file"
+          "group": "navigation"
         }
       ]
     },
@@ -88,19 +58,7 @@
       {
         "command": "llmcheckpoint.saveVersion",
         "title": "Save Version",
-        "category": "LLM Checkpoint",
         "icon": "$(add)"
-      },
-      {
-        "command": "llmcheckpoint.showVersionHistory",
-        "title": "Show Version History",
-        "category": "LLM Checkpoint",
-        "icon": "$(history)"
-      },
-      {
-        "command": "llmcheckpoint.restoreVersion",
-        "title": "Restore Version",
-        "category": "LLM Checkpoint"
       },
       {
         "command": "llmcheckpoint.viewVersion",
@@ -108,18 +66,24 @@
         "icon": "$(eye)"
       },
       {
+        "command": "llmcheckpoint.restoreVersion",
+        "title": "Restore Version",
+        "icon": "$(history)"
+      },
+      {
         "command": "llmcheckpoint.exportVersion",
-        "title": "Export Version to history_context.txt",
+        "title": "Export Version",
         "icon": "$(export)"
       },
       {
-        "command": "llmcheckpoint.refreshVersions",
-        "title": "Refresh Versions",
-        "icon": "$(refresh)"
+        "command": "llmcheckpoint.deleteVersion",
+        "title": "Delete Version",
+        "icon": "$(trash)"
       },
       {
-        "command": "llmcheckpoint.deleteVersion",
-        "title": "Delete Version"
+        "command": "llmcheckpoint.refreshVersions",
+        "title": "Refresh",
+        "icon": "$(refresh)"
       }
     ],
     "keybindings": [

@@ -34,7 +34,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		
 		console.log('Registering commands...');
 		const commands = [
-			vscode.commands.registerCommand('llmcheckpoint.saveVersion', saveCurrentVersion),
+			vscode.commands.registerCommand('llmcheckpoint.saveVersion', async () => {
+				console.log('Save version command triggered');
+				await saveCurrentVersion();
+			}),
 			vscode.commands.registerCommand('llmcheckpoint.showVersionHistory', showVersionHistory),
 			vscode.commands.registerCommand('llmcheckpoint.restoreVersion', restoreVersion),
 			vscode.commands.registerCommand('llmcheckpoint.viewVersion', (version) => {
@@ -59,10 +62,30 @@ export async function activate(context: vscode.ExtensionContext) {
 		const watcher = vscode.workspace.createFileSystemWatcher('**/*');
 		
 		
-		const onSaveDisposable = vscode.workspace.onDidSaveTextDocument(async (document) => {
-			console.log(`File saved: ${document.uri.toString()}`);
-			await handleFileChange(document.uri);
-			versionTreeProvider.refresh();
+		const onSaveDisposable = vscode.workspace.onWillSaveTextDocument(async (e) => {
+			console.log(`File about to be saved: ${e.document.uri.toString()}`);
+			const relativePath = vscode.workspace.asRelativePath(e.document.uri);
+			const content = e.document.getText();
+
+			let file = fileVersionDB.getFile(relativePath);
+			if (!file) {
+				console.log('Creating new file record for:', relativePath);
+				file = fileVersionDB.createFile(relativePath);
+			}
+
+			
+			const versions = fileVersionDB.getFileVersions(file.id, 1);
+			if (versions.length > 0 && versions[0].content === content) {
+				console.log('Content unchanged from last version, skipping');
+				return;
+			}
+
+			console.log('Creating new version for file:', relativePath);
+			const version = fileVersionDB.createVersion(file.id, content);
+			console.log(`Created version ${version.version_number} for file:`, relativePath);
+			
+			
+			versionTreeProvider.refresh(relativePath);
 		});
 
 		
@@ -94,70 +117,46 @@ export async function activate(context: vscode.ExtensionContext) {
 
 async function handleFileChange(uri: vscode.Uri) {
 	try {
-		console.log('Handling file change for:', uri.toString());
-		const document = await vscode.workspace.openTextDocument(uri);
-		
-		
+		console.log('File changed:', uri.toString());
+		versionTreeProvider.refresh();
+	} catch (error) {
+		console.error('Error handling file change:', error);
+	}
+}
+
+async function saveCurrentVersion() {
+	try {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor) {
+			vscode.window.showWarningMessage('No active editor');
+			return;
+		}
+
+		const document = editor.document;
 		if (!document.isDirty) {
-			console.log('Document is not dirty, skipping version creation');
+			vscode.window.showInformationMessage('No changes to save');
 			return;
 		}
 
-		const relativePath = vscode.workspace.asRelativePath(uri);
+		const relativePath = vscode.workspace.asRelativePath(document.uri);
 		const content = document.getText();
-
-		
-		if (!content || typeof content !== 'string') {
-			console.log('Invalid content, skipping version creation');
-			return;
-		}
 
 		let file = fileVersionDB.getFile(relativePath);
 		if (!file) {
 			file = fileVersionDB.createFile(relativePath);
 		}
 
-		
-		const versions = fileVersionDB.getFileVersions(file.id);
-		const latestVersion = versions[versions.length - 1];
-
-		if (latestVersion) {
-			
-			if (latestVersion.content === content) {
-				console.log('No actual changes detected, skipping version creation');
-				return;
-			}
-		}
-
-		console.log('Creating new version for file:', relativePath);
 		const version = fileVersionDB.createVersion(file.id, content);
 		console.log(`Created version ${version.version_number} for file:`, relativePath);
-		versionTreeProvider.refresh();
+		
+		
+		versionTreeProvider.refresh(relativePath);
+		vscode.window.showInformationMessage(`Version ${version.version_number} saved`);
 
 	} catch (error) {
-		console.error('Error handling file change:', error);
+		console.error('Error saving version:', error);
 		vscode.window.showErrorMessage(`Failed to save version: ${error}`);
 	}
-}
-
-async function saveCurrentVersion() {
-	const editor = vscode.window.activeTextEditor;
-	if (!editor) {
-		vscode.window.showWarningMessage('No active editor');
-		return;
-	}
-
-	const document = editor.document;
-	const relativePath = vscode.workspace.asRelativePath(document.uri);
-	const content = document.getText();
-
-	let file = fileVersionDB.getFile(relativePath);
-	if (!file) {
-		file = fileVersionDB.createFile(relativePath);
-	}
-
-	const version = fileVersionDB.createVersion(file.id, content);
-	vscode.window.showInformationMessage(`Version ${version.version_number} saved`);
 }
 
 async function showVersionHistory() {

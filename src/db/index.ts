@@ -152,4 +152,17 @@ export class FileVersionDB {
         stmt.run([versionId]);
         this.saveToFile();
     }
+
+    getAllFiles(): FileRecord[] {
+        const result = this.db.exec('SELECT * FROM files');
+        if (result.length === 0) {
+            return [];
+        }
+        
+        return result[0].values.map(row => ({
+            id: row[0] as number,
+            file_path: row[1] as string,
+            current_version_id: row[2] as number | null
+        }));
+    }
 } 

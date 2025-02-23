@@ -3,6 +3,7 @@ import { FileVersionDB } from './db';
 import { FileRecord, VersionRecord } from './db/schema';
 import * as fs from 'fs';
 import * as path from 'path';
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon } from 'vscode';
 
 
 const VERSION_SCHEME = 'llm-version';
@@ -46,11 +47,18 @@ export class VersionTreeItem extends vscode.TreeItem {
         public readonly collapsibleState: vscode.TreeItemCollapsibleState,
         public readonly file?: FileRecord,
         public readonly version?: VersionRecord,
-        command?: vscode.Command
+        public readonly versions?: VersionRecord[]
     ) {
         super(label, collapsibleState);
-        if (command) {
-            this.command = command;
+        
+        if (version) {
+            this.contextValue = 'version';
+            this.command = {
+                command: 'llmcheckpoint.viewVersion',
+                title: 'View Version',
+                arguments: [version]
+            };
+            this.iconPath = new vscode.ThemeIcon('git-commit');
         }
     }
 }
@@ -58,13 +66,17 @@ export class VersionTreeItem extends vscode.TreeItem {
 export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<VersionTreeItem | undefined | null | void> = new vscode.EventEmitter<VersionTreeItem | undefined | null | void>();
     readonly onDidChangeTreeData: vscode.Event<VersionTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+    private expandedFiles: Set<string> = new Set();
 
     constructor(private fileVersionDB: FileVersionDB) {
         console.log('VersionTreeProvider constructed');
     }
 
-    refresh(): void {
-        console.log('Refreshing tree view...');
+    refresh(filePath?: string): void {
+        console.log('Refreshing tree view...', filePath ? `for file: ${filePath}` : 'full refresh');
+        if (filePath) {
+            this.expandedFiles.add(filePath);
+        }
         this._onDidChangeTreeData.fire();
     }
 
@@ -76,41 +88,47 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
         console.log('Getting children for tree view...', element ? `Parent: ${element.label}` : 'Root level');
         
         if (!element) {
+            const allFiles = this.fileVersionDB.getAllFiles();
+            console.log(`Found ${allFiles.length} files in database`);
             
-            const openFiles = vscode.workspace.textDocuments
-                .filter(doc => !doc.isUntitled && doc.uri.scheme === 'file');
-            
-            console.log(`Found ${openFiles.length} open files`);
-            
-            return openFiles.map(doc => {
-                const relativePath = vscode.workspace.asRelativePath(doc.uri);
-                const file = this.fileVersionDB.getFile(relativePath);
-                console.log(`Processing file: ${relativePath}, DB record:`, file);
+            return allFiles.map(file => {
+                const relativePath = file.file_path;
+                const versions = this.fileVersionDB.getFileVersions(file.id);
+                console.log(`Processing file: ${relativePath}, found ${versions.length} versions`);
+                
+                const collapsibleState = this.expandedFiles.has(relativePath) 
+                    ? TreeItemCollapsibleState.Expanded 
+                    : TreeItemCollapsibleState.Collapsed;
+                
                 return new VersionTreeItem(
                     relativePath,
-                    vscode.TreeItemCollapsibleState.Collapsed,
-                    file
+                    versions.length > 0 ? collapsibleState : TreeItemCollapsibleState.None,
+                    file,
+                    undefined,
+                    versions
                 );
             });
         } else if (element.file) {
+            if (element.versions) {
+                return element.versions.map(version => 
+                    new VersionTreeItem(
+                        `Version ${version.version_number} (${new Date(version.timestamp).toLocaleString()})`,
+                        TreeItemCollapsibleState.None,
+                        element.file,
+                        version
+                    )
+                );
+            }
             
             const versions = this.fileVersionDB.getFileVersions(element.file.id);
-            console.log(`Found ${versions.length} versions for file ${element.file.file_path}`);
-            
-            return versions.map(version => {
-                const label = `Version ${version.version_number}`;
-                const description = new Date(version.timestamp).toLocaleString();
-                const treeItem = new VersionTreeItem(
-                    label,
-                    vscode.TreeItemCollapsibleState.None,
+            return versions.map(version => 
+                new VersionTreeItem(
+                    `Version ${version.version_number} (${new Date(version.timestamp).toLocaleString()})`,
+                    TreeItemCollapsibleState.None,
                     element.file,
                     version
-                );
-                treeItem.description = description;
-                treeItem.contextValue = 'version';
-                console.log('Creating tree item with version:', version);
-                return treeItem;
-            });
+                )
+            );
         }
         return [];
     }
