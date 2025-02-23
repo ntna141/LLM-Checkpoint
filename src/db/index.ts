@@ -42,8 +42,20 @@ export class FileVersionDB {
         };
     }
 
+    getFileById(fileId: number): FileRecord | undefined {
+        const result = this.db.exec('SELECT * FROM files WHERE id = ?', [fileId]);
+        if (result.length === 0 || result[0].values.length === 0) {
+            return undefined;
+        }
+        return {
+            id: result[0].values[0][0] as number,
+            file_path: result[0].values[0][1] as string,
+            current_version_id: result[0].values[0][2] as number | null
+        };
+    }
+
     createVersion(fileId: number, content: string): VersionRecord {
-        // Get max version number
+        
         const maxVersionResult = this.db.exec(
             'SELECT COALESCE(MAX(version_number), 0) as max_version FROM versions WHERE file_id = ?',
             [fileId]
@@ -51,17 +63,17 @@ export class FileVersionDB {
         const maxVersion = maxVersionResult[0].values[0][0] as number;
         const nextVersion = maxVersion + 1;
 
-        // Insert new version
+        
         const stmt = this.db.prepare(`
             INSERT INTO versions (file_id, content, version_number)
             VALUES (?, ?, ?)
         `);
         stmt.run([fileId, content, nextVersion]);
 
-        // Get the inserted version
+        
         const versionResult = this.db.exec('SELECT * FROM versions WHERE id = last_insert_rowid()')[0];
         
-        // Update current version in files table
+        
         const updateStmt = this.db.prepare(`
             UPDATE files
             SET current_version_id = last_insert_rowid()

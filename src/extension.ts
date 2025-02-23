@@ -1,27 +1,23 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { FileVersionDB } from './db';
 import { initializeDatabase } from './db/schema';
-import { VersionTreeProvider, exportVersionToFile } from './versionTreeProvider';
+import { VersionTreeProvider, exportVersionToFile, viewVersion, registerVersionProvider } from './versionTreeProvider';
 import { VersionRecord } from './db/schema';
 
 let fileVersionDB: FileVersionDB;
 let versionTreeProvider: VersionTreeProvider;
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
 	console.log('Starting LLMCheckpoint activation...');
 
 	try {
-		// Initialize database
+		
 		console.log('Initializing database...');
 		const db = await initializeDatabase(context);
 		fileVersionDB = new FileVersionDB(db, context);
 		console.log('Database initialized successfully');
 
-		// Create and register the tree view provider
+		
 		console.log('Setting up tree view provider...');
 		versionTreeProvider = new VersionTreeProvider(fileVersionDB);
 		const treeView = vscode.window.createTreeView('llmcheckpointVersions', {
@@ -30,13 +26,20 @@ export async function activate(context: vscode.ExtensionContext) {
 		});
 		console.log('Tree view provider created');
 
-		// Register commands
+		
+		registerVersionProvider(context);
+		console.log('Version content provider registered');
+
+		
 		console.log('Registering commands...');
 		const commands = [
 			vscode.commands.registerCommand('llmcheckpoint.saveVersion', saveCurrentVersion),
 			vscode.commands.registerCommand('llmcheckpoint.showVersionHistory', showVersionHistory),
 			vscode.commands.registerCommand('llmcheckpoint.restoreVersion', restoreVersion),
-			vscode.commands.registerCommand('llmcheckpoint.viewVersion', viewVersion),
+			vscode.commands.registerCommand('llmcheckpoint.viewVersion', (version) => {
+				console.log('View command triggered with:', version);
+				return viewVersion(version, fileVersionDB);
+			}),
 			vscode.commands.registerCommand('llmcheckpoint.exportVersion', exportVersion),
 			vscode.commands.registerCommand('llmcheckpoint.refreshVersions', () => {
 				console.log('Refreshing versions view...');
@@ -45,18 +48,18 @@ export async function activate(context: vscode.ExtensionContext) {
 		];
 		console.log('Commands registered');
 
-		// Create file system watcher
+		
 		console.log('Setting up file watcher...');
 		const watcher = vscode.workspace.createFileSystemWatcher('**/*');
 		
-		// Handle file saves
+		
 		const onSaveDisposable = vscode.workspace.onDidSaveTextDocument(async (document) => {
 			console.log(`File saved: ${document.uri.toString()}`);
 			await handleFileChange(document.uri);
 			versionTreeProvider.refresh();
 		});
 
-		// Handle file changes
+		
 		const fileWatcherDisposable = watcher.onDidChange(async (uri) => {
 			console.log(`File changed: ${uri.toString()}`);
 			const openTextDocuments = vscode.workspace.textDocuments;
@@ -66,11 +69,11 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		});
 
-		// Register all disposables
+		
 		context.subscriptions.push(
 			...commands,
 			fileWatcherDisposable,
-			onSaveDisposable,  // Add the save handler
+			onSaveDisposable,  
 			watcher,
 			treeView
 		);
@@ -90,6 +93,12 @@ async function handleFileChange(uri: vscode.Uri) {
 		const document = await vscode.workspace.openTextDocument(uri);
 		const content = document.getText();
 
+		
+		if (!content || typeof content !== 'string') {
+			console.log('Invalid content, skipping version creation');
+			return;
+		}
+
 		console.log('Creating/updating file record for:', relativePath);
 		let file = fileVersionDB.getFile(relativePath);
 		if (!file) {
@@ -97,11 +106,29 @@ async function handleFileChange(uri: vscode.Uri) {
 			file = fileVersionDB.createFile(relativePath);
 		}
 
-		console.log('Creating new version for file:', relativePath);
-		const version = fileVersionDB.createVersion(file.id, content);
-		console.log(`Created version ${version.version_number} for file:`, relativePath);
 		
-		versionTreeProvider.refresh();
+		const versions = fileVersionDB.getFileVersions(file.id);
+		const latestVersion = versions[versions.length - 1];
+		
+		try {
+			
+			JSON.parse(JSON.stringify(content));
+			
+			if (latestVersion && latestVersion.content === content) {
+				console.log('Content unchanged, skipping version creation');
+				return;
+			}
+
+			console.log('Creating new version for file:', relativePath);
+			const version = fileVersionDB.createVersion(file.id, content);
+			console.log(`Created version ${version.version_number} for file:`, relativePath);
+			
+			versionTreeProvider.refresh();
+		} catch (jsonError) {
+			console.error('Error processing content:', jsonError);
+			vscode.window.showErrorMessage('Failed to process file content: Invalid format');
+			return;
+		}
 	} catch (error) {
 		console.error('Error handling file change:', error);
 		vscode.window.showErrorMessage(`Failed to save version: ${error}`);
@@ -165,7 +192,7 @@ async function showVersionHistory() {
 		const doc = await vscode.workspace.openTextDocument(uri);
 		const editor = await vscode.window.showTextDocument(doc);
 		
-		// Show the diff
+		
 		const originalContent = selected.version.content;
 		const tempUri = uri.with({ scheme: 'untitled', path: `${relativePath}-v${selected.version.version_number}` });
 		const tempDoc = await vscode.workspace.openTextDocument(tempUri);
@@ -220,51 +247,6 @@ async function restoreVersion() {
 	}
 }
 
-async function viewVersion(version: VersionRecord) {
-	if (!version.file_id) {
-		return;
-	}
-
-	// Get the current file content
-	const file = fileVersionDB.getFile(version.file_id.toString());
-	if (!file) {
-		return;
-	}
-
-	try {
-		// Create temporary files for diffing
-		const currentDoc = await vscode.workspace.openTextDocument(vscode.Uri.file(file.file_path));
-		const currentContent = currentDoc.getText();
-
-		// Create the diff using the built-in diff editor
-		const versionUri = vscode.Uri.parse(`untitled:Version ${version.version_number}`);
-		const versionDoc = await vscode.workspace.openTextDocument(versionUri);
-		
-		// Show both documents side by side
-		await vscode.window.showTextDocument(versionDoc, { viewColumn: vscode.ViewColumn.One });
-		await vscode.window.activeTextEditor?.edit(edit => {
-			const fullRange = new vscode.Range(
-				versionDoc.positionAt(0),
-				versionDoc.positionAt(versionDoc.getText().length)
-			);
-			edit.replace(fullRange, version.content);
-		});
-
-		// Show the current version
-		await vscode.window.showTextDocument(currentDoc, { viewColumn: vscode.ViewColumn.Two });
-
-		// Execute the diff command
-		await vscode.commands.executeCommand('vscode.diff',
-			versionUri,
-			currentDoc.uri,
-			`Version ${version.version_number} (${new Date(version.timestamp).toLocaleString()}) ↔ Current`
-		);
-	} catch (error: any) {
-		const errorMessage = error?.message || 'Unknown error occurred';
-		vscode.window.showErrorMessage('Failed to show diff: ' + errorMessage);
-	}
-}
-
 async function exportVersion(version: VersionRecord) {
 	try {
 		await exportVersionToFile(version, 'history_context.txt');
@@ -275,7 +257,7 @@ async function exportVersion(version: VersionRecord) {
 	}
 }
 
-// This method is called when your extension is deactivated
+
 export function deactivate() {
-	// Cleanup will be handled by VS Code's disposal of subscriptions
+	
 }

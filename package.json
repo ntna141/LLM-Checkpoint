@@ -100,7 +100,7 @@
       {
         "command": "llmcheckpoint.viewVersion",
         "title": "View Version",
-        "icon": "$(diff)"
+        "icon": "$(eye)"
       },
       {
         "command": "llmcheckpoint.exportVersion",

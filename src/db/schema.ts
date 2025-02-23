@@ -20,15 +20,15 @@ export interface VersionRecord {
 export async function initializeDatabase(context: vscode.ExtensionContext): Promise<Database> {
     const dbPath = path.join(context.globalStoragePath, 'file_versions.db');
     
-    // Ensure the directory exists
+    
     if (!fs.existsSync(context.globalStoragePath)) {
         fs.mkdirSync(context.globalStoragePath, { recursive: true });
     }
 
-    // Initialize SQL.js
+    
     const SQL = await initSqlJs();
     
-    // Load existing database or create new one
+    
     let db: Database;
     if (fs.existsSync(dbPath)) {
         const buffer = fs.readFileSync(dbPath);
@@ -37,10 +37,10 @@ export async function initializeDatabase(context: vscode.ExtensionContext): Prom
         db = new SQL.Database();
     }
 
-    // Enable foreign keys
+    
     db.run('PRAGMA foreign_keys = ON');
 
-    // Create tables if they don't exist
+    
     db.run(`
         CREATE TABLE IF NOT EXISTS files (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,7 +68,7 @@ export async function initializeDatabase(context: vscode.ExtensionContext): Prom
         CREATE INDEX IF NOT EXISTS idx_versions_timestamp ON versions(timestamp);
     `);
 
-    // Save the database to disk
+    
     const data = db.export();
     fs.writeFileSync(dbPath, Buffer.from(data));
 
