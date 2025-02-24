@@ -1,13 +1,13 @@
 {
   "name": "llmcheckpoint",
-  "displayName": "Quick Checkpoint",
+  "displayName": "LLM Checkpoint",
   "description": "Provide checkpoint context to LLM coding assistants",
   "version": "0.0.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/ntna141/Quick-Checkpoint"
   },
-  "publisher": "QuickCheckpoint",
+  "publisher": "ngwx-dev",
   "engines": {
     "vscode": "^1.95.0"
   },

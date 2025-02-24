@@ -231,6 +231,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		});
 
 		const fileWatcherDisposable = watcher.onDidChange(async (uri) => {
+			if (uri.fsPath.endsWith('history_context.txt')) {
+				return;
+			}
+
 			const openTextDocuments = vscode.workspace.textDocuments;
 			if (openTextDocuments.some(doc => doc.uri.toString() === uri.toString())) {
 				await handleFileChange(uri);
