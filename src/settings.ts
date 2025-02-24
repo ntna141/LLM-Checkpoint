@@ -3,6 +3,7 @@ import * as path from 'path';
 
 export class SettingsManager {
     private static readonly HISTORY_PATH_KEY = 'historyContextPath';
+    private static readonly SAVE_ALL_CHANGES_KEY = 'saveAllChanges';
     private panel: vscode.WebviewPanel | undefined;
 
     constructor(private context: vscode.ExtensionContext) {}
@@ -10,6 +11,22 @@ export class SettingsManager {
     async getHistoryPath(): Promise<string> {
         const workspaceState = this.context.workspaceState;
         return workspaceState.get<string>(SettingsManager.HISTORY_PATH_KEY, 'history_context.txt');
+    }
+
+    async getSaveAllChanges(): Promise<boolean> {
+        const workspaceState = this.context.workspaceState;
+        const value = workspaceState.get<boolean>(SettingsManager.SAVE_ALL_CHANGES_KEY, true);
+        console.log('Getting saveAllChanges setting:', value);
+        return value;
+    }
+
+    async setSaveAllChanges(value: boolean): Promise<void> {
+        console.log('Setting saveAllChanges to:', value);
+        await this.context.workspaceState.update(SettingsManager.SAVE_ALL_CHANGES_KEY, value);
+        // Update the webview if it's open
+        if (this.panel) {
+            this.panel.webview.html = await this.getWebviewContent();
+        }
     }
 
     async setHistoryPath(filePath: string): Promise<void> {
@@ -22,6 +39,7 @@ export class SettingsManager {
 
     private async getWebviewContent(): Promise<string> {
         const currentPath = await this.getHistoryPath();
+        const saveAllChanges = await this.getSaveAllChanges();
         return `<!DOCTYPE html>
         <html>
         <head>
@@ -87,6 +105,18 @@ export class SettingsManager {
                     margin-top: 4px;
                     display: none;
                 }
+                .checkbox-container {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-top: 16px;
+                }
+                .checkbox-container input[type="checkbox"] {
+                    margin: 0;
+                }
+                .checkbox-label {
+                    font-size: 13px;
+                }
             </style>
         </head>
         <body>
@@ -103,6 +133,10 @@ export class SettingsManager {
                     </div>
                     <div class="error" id="pathError"></div>
                 </div>
+                <div class="checkbox-container">
+                    <input type="checkbox" id="saveAllChanges" ${saveAllChanges ? 'checked' : ''}>
+                    <label for="saveAllChanges" class="checkbox-label">Save all changes (uncheck to save only multiline changes)</label>
+                </div>
             </div>
             <script>
                 const vscode = acquireVsCodeApi();
@@ -118,6 +152,13 @@ export class SettingsManager {
                         path: input.value
                     });
                 }
+
+                document.getElementById('saveAllChanges').addEventListener('change', (event) => {
+                    vscode.postMessage({
+                        command: 'updateSaveAllChanges',
+                        value: event.target.checked
+                    });
+                });
 
                 window.addEventListener('message', event => {
                     const message = event.data;
@@ -160,6 +201,9 @@ export class SettingsManager {
                         break;
                     case 'updatePath':
                         await this.validateAndUpdatePath(message.path);
+                        break;
+                    case 'updateSaveAllChanges':
+                        await this.setSaveAllChanges(message.value);
                         break;
                 }
             },

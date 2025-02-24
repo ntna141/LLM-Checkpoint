@@ -221,7 +221,7 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
         console.log('Getting children for tree view...', element ? `Parent: ${element.label}` : 'Root level');
         
         if (!element) {
-            // Get all files and filter out those without versions
+            
             const allFiles = this.fileVersionDB.getAllFiles();
             const filesWithVersions = allFiles.filter(file => {
                 const versions = this.fileVersionDB.getFileVersions(file.id);
@@ -245,14 +245,14 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
                 const dirPath = path.dirname(relativePath);
                 
                 const treeItem = new VersionTreeItem(
-                    fileName,  // Just show the filename as the label
+                    fileName,  
                     shouldExpand ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
                     file,
                     undefined,
                     versions
                 );
                 
-                // Add description to show the path in a lighter font
+                
                 treeItem.description = dirPath === '.' ? undefined : dirPath;
                 
                 this.fileItems.set(relativePath, treeItem);

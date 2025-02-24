@@ -64,7 +64,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
 		const watcher = vscode.workspace.createFileSystemWatcher('**/*');
 		
-		
 		const onSaveDisposable = vscode.workspace.onWillSaveTextDocument(async (e) => {
 			try {
 				const relativePath = vscode.workspace.asRelativePath(e.document.uri);
@@ -75,11 +74,58 @@ export async function activate(context: vscode.ExtensionContext) {
 					file = fileVersionDB.createFile(relativePath);
 				}
 
-				const versions = fileVersionDB.getFileVersions(file.id, 1);
-				if (versions.length > 0 && versions[0].content === content) {
-					return;
+				// Get the current setting for saving all changes
+				const saveAllChanges = await settingsManager.getSaveAllChanges();
+				console.log('Current saveAllChanges setting:', saveAllChanges);
+
+				// If not saving all changes, check if the changes are multiline
+				if (!saveAllChanges) {
+					console.log('Checking for multiline changes...');
+					const versions = fileVersionDB.getFileVersions(file.id, 1);
+					if (versions.length > 0) {
+						const previousContent = versions[0].content;
+						if (previousContent === content) {
+							console.log('Content unchanged, skipping save');
+							return;
+						}
+
+						const previousLines = previousContent.split('\n');
+						const currentLines = content.split('\n');
+
+						console.log('Previous version line count:', previousLines.length);
+						console.log('Current version line count:', currentLines.length);
+
+						// Count the number of lines that are different
+						let changedLines = 0;
+						const maxLines = Math.max(previousLines.length, currentLines.length);
+						for (let i = 0; i < maxLines; i++) {
+							if (previousLines[i] !== currentLines[i]) {
+								changedLines++;
+								console.log(`Line ${i + 1} changed`);
+								if (changedLines > 1) {
+									console.log('Multiple lines changed, will save version');
+									break;
+								}
+							}
+						}
+
+						if (changedLines <= 1) {
+							console.log('Only single line change detected, skipping save');
+							vscode.window.showInformationMessage('Single line change detected - version not saved');
+							return;
+						}
+					}
+				} else {
+					// Check if content is unchanged
+					const versions = fileVersionDB.getFileVersions(file.id, 1);
+					if (versions.length > 0 && versions[0].content === content) {
+						console.log('Content unchanged, skipping save');
+						return;
+					}
 				}
 
+				// Create the version and refresh the tree
+				fileVersionDB.createVersion(file.id, content);
 				setTimeout(() => {
 					versionTreeProvider.refresh(relativePath);
 				}, 100);
@@ -146,7 +192,6 @@ async function saveCurrentVersion() {
 		}
 
 		const version = fileVersionDB.createVersion(file.id, content);
-		
 		versionTreeProvider.refresh(relativePath);
 		vscode.window.showInformationMessage(`Version ${version.version_number} saved`);
 
