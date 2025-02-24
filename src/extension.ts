@@ -31,38 +31,62 @@ async function getLatestCommitMessage(workspacePath: string): Promise<string> {
 
 async function handleGitCommit(workspacePath: string, repository: any, changedFiles: Set<string>, commitMessage?: string) {
 	try {
-		const autoCleanup = await settingsManager.getAutoCleanupAfterCommit();
-		if (!autoCleanup) {
-			return;
-		}
-
+		// Get the commit message if not provided
 		if (!commitMessage) {
 			commitMessage = await getLatestCommitMessage(workspacePath);
 		}
 		
-		if (!commitMessage) {
+		// Skip if no valid commit message
+		if (!commitMessage || commitMessage.trim() === '') {
 			return;
 		}
 
+		// Check if auto-cleanup is enabled
+		const autoCleanup = await settingsManager.getAutoCleanupAfterCommit();
+		
+		// Process each file that was committed
 		const allFiles = fileVersionDB.getAllFiles();
+		let processedCount = 0;
+		
 		for (const file of allFiles) {
 			const normalizedFilePath = path.normalize(file.file_path);
-
-			if (changedFiles.has(normalizedFilePath)) {
-				const versions = fileVersionDB.getFileVersions(file.id);
-				if (versions.length > 0) {
-					const latestVersion = versions[0];
-					const newContent = `/* Git commit: ${commitMessage} */\n${latestVersion.content}`;
-					fileVersionDB.createVersion(file.id, newContent);
-					for (const version of versions) {
-						fileVersionDB.deleteVersion(version.id);
-					}
+			
+			// Skip files that weren't in this commit
+			if (!changedFiles.has(normalizedFilePath)) {
+				continue;
+			}
+			
+			const versions = fileVersionDB.getFileVersions(file.id);
+			if (versions.length === 0) {
+				continue;
+			}
+			
+			// Get the latest version
+			const latestVersion = versions[0];
+			
+			// Create a new version with the commit message marker
+			const newContent = `/* Git commit: ${commitMessage} */\n${latestVersion.content}`;
+			fileVersionDB.createVersion(file.id, newContent);
+			processedCount++;
+			
+			// If auto-cleanup is enabled, delete previous versions
+			if (autoCleanup) {
+				for (const version of versions) {
+					fileVersionDB.deleteVersion(version.id);
 				}
 			}
 		}
 		
-		versionTreeProvider.refresh();
-		await settingsManager.showConditionalInfoMessage('Cleaned up versions after git commit');
+		// Refresh the tree view if any files were processed
+		if (processedCount > 0) {
+			versionTreeProvider.refresh();
+			
+			const message = autoCleanup 
+				? 'Cleaned up versions after git commit'
+				: 'Updated versions with git commit information';
+				
+			await settingsManager.showConditionalInfoMessage(message);
+		}
 	} catch (error) {
 		console.error('Error handling git commit:', error);
 	}
@@ -393,62 +417,64 @@ async function appendVersion(version: VersionRecord) {
 }
 
 function setupRepositoryWatcher(repository: any) {
+	let isProcessingCommit = false;
+	
 	repository.state.onDidChange(async () => {
-		const head = repository.state.HEAD;
-		const commit = head?.commit;
-		const repoPath = repository.rootUri.fsPath;
-
-		// Get fresh repository instance from Git extension
-		const gitExtension = vscode.extensions.getExtension('vscode.git');
-		if (!gitExtension) {
-			return;
-		}
-		
-		const git = gitExtension.exports.getAPI(1);
-		const currentRepo = git.repositories.find((repo: any) => 
-			repo.rootUri.fsPath === repoPath
-		);
-
-		// Track staged files
-		if (repository.state.indexChanges?.length > 0) {
-			const stagedFiles = new Set(repository.state.indexChanges.map((change: any) => {
+		try {
+			// Avoid concurrent processing
+			if (isProcessingCommit) {
+				return;
+			}
+			
+			const head = repository.state.HEAD;
+			const commit = head?.commit;
+			const repoPath = repository.rootUri.fsPath;
+			
+			// Skip if no HEAD commit
+			if (!commit) {
+				return;
+			}
+			
+			// Track staged files
+			const stagedFiles: Set<string> = new Set(repository.state.indexChanges.map((change: any) => {
 				const absolutePath = change.uri.fsPath;
 				return path.normalize(vscode.workspace.asRelativePath(absolutePath));
 			}));
 			
-			// Store staged files for tracking
 			stagedChangesMap.set(repoPath, {
-				files: stagedFiles as Set<string>,
+				files: stagedFiles,
 				message: ''
 			});
-		}
-
-		// Check if a commit just happened (no more staged or working tree changes)
-		if (commit && 
-			repository.state.workingTreeChanges.length === 0 && 
-			repository.state.indexChanges.length === 0) {
 			
+			// Check if a commit just happened
 			const lastCommit = lastCommitByRepo.get(repoPath);
 			if (lastCommit !== commit) {
-				// New commit detected
-				lastCommitByRepo.set(repoPath, commit);
-				
-				const commitMessage = await getLatestCommitMessage(repoPath);
-				const stagedInfo = stagedChangesMap.get(repoPath);
-				
-				if (stagedInfo && stagedInfo.files.size > 0) {
-					console.log('Processing commit:', {
-						message: commitMessage,
-						files: [...stagedInfo.files],
-						repoPath
-					});
+				isProcessingCommit = true;
+				try {
+					// Update the last known commit
+					lastCommitByRepo.set(repoPath, commit);
 					
-					// Process the commit
-					await handleGitCommit(repoPath, repository, stagedInfo.files, commitMessage);
-					// Clear the staged files after processing
-					stagedChangesMap.delete(repoPath);
+					// Get the commit message
+					const commitMessage = await getLatestCommitMessage(repoPath);
+					if (!commitMessage) {
+						return; // Skip if no commit message
+					}
+					
+					// Get the files that were staged before this commit
+					const stagedInfo = stagedChangesMap.get(repoPath);
+					if (stagedInfo && stagedInfo.files.size > 0) {
+						// Process the commit
+						await handleGitCommit(repoPath, repository, stagedInfo.files, commitMessage);
+						// Clear the staged files after processing
+						stagedChangesMap.delete(repoPath);
+					}
+				} finally {
+					isProcessingCommit = false;
 				}
 			}
+		} catch (error) {
+			console.error('Error in repository watcher:', error);
+			isProcessingCommit = false;
 		}
 	});
 }
