@@ -17,12 +17,24 @@ let versionTreeProvider: VersionTreeProvider;
 let settingsManager: SettingsManager;
 
 const lastCommitByRepo = new Map<string, string>();
-const stagedChangesMap = new Map<string, Set<string>>();
+const stagedChangesMap = new Map<string, { files: Set<string>, message: string }>();
 
 async function getLatestCommitMessage(workspacePath: string): Promise<string> {
 	try {
-		const { stdout } = await execAsync('git log -1 --pretty=%B', { cwd: workspacePath });
-		return stdout.trim();
+		const { stdout } = await execAsync('git log -1 --pretty=format:"%s"', { cwd: workspacePath });
+		const message = stdout.trim();
+		
+		if (!message) {
+			console.error('Empty commit message received');
+			return '';
+		}
+
+		if (message === 'this') {
+			console.warn('Suspicious commit message "this" received, might indicate an error');
+		}
+
+		console.log(`Retrieved commit message: "${message}"`);
+		return message;
 	} catch (error) {
 		console.error('Error getting commit message:', error);
 		return '';
@@ -394,7 +406,6 @@ async function appendVersion(version: VersionRecord) {
 }
 
 function setupRepositoryWatcher(repository: any) {
-	
 	repository.state.onDidChange(() => {
 		const head = repository.state.HEAD;
 		const commit = head?.commit;
@@ -405,7 +416,10 @@ function setupRepositoryWatcher(repository: any) {
 				const absolutePath = change.uri.fsPath;
 				return path.normalize(vscode.workspace.asRelativePath(absolutePath));
 			}) as string[]);
-			stagedChangesMap.set(repoPath, stagedFiles);
+			stagedChangesMap.set(repoPath, {
+				files: stagedFiles,
+				message: head?.message || ''
+			});
 		}
 		
 		if (commit && 
@@ -414,11 +428,11 @@ function setupRepositoryWatcher(repository: any) {
 			
 			const lastCommit = lastCommitByRepo.get(repoPath);
 			if (lastCommit !== commit) {
-				const stagedFiles = stagedChangesMap.get(repoPath);
-				if (stagedFiles && stagedFiles.size > 0) {
+				const staged = stagedChangesMap.get(repoPath);
+				if (staged && staged.files.size > 0) {
 					lastCommitByRepo.set(repoPath, commit);
-					handleGitCommit(repoPath, repository, stagedFiles);
-					stagedChangesMap.delete(repoPath); 
+					handleGitCommit(repoPath, repository, staged.files);
+					stagedChangesMap.delete(repoPath);
 				}
 			}
 		}
