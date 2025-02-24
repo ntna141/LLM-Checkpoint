@@ -17,7 +17,7 @@ export class SettingsManager {
 
     async getSaveAllChanges(): Promise<boolean> {
         const workspaceState = this.context.workspaceState;
-        const value = workspaceState.get<boolean>(SettingsManager.SAVE_ALL_CHANGES_KEY, true);
+        const value = workspaceState.get<boolean>(SettingsManager.SAVE_ALL_CHANGES_KEY, false);
         return value;
     }
 
@@ -29,7 +29,7 @@ export class SettingsManager {
 
     async getAutoCleanupAfterCommit(): Promise<boolean> {
         const workspaceState = this.context.workspaceState;
-        return workspaceState.get<boolean>(SettingsManager.AUTO_CLEANUP_AFTER_COMMIT_KEY, false);
+        return workspaceState.get<boolean>(SettingsManager.AUTO_CLEANUP_AFTER_COMMIT_KEY, true);
     }
 
     async setSaveAllChanges(value: boolean): Promise<void> {
