@@ -84,6 +84,7 @@ export class SettingsManager {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
             <style>
                 body {
                     padding: 20px;
@@ -166,8 +167,8 @@ export class SettingsManager {
                         <input type="text" class="path-input" id="pathInput" value="${currentPath}" 
                                placeholder="Enter path relative to workspace root">
                         <div class="button-container">
-                            <button class="button" onclick="savePath()">Save</button>
-                            <button class="button" onclick="choosePath()">Choose Location</button>
+                            <button class="button" onclick="handleSavePath()">Save</button>
+                            <button class="button" onclick="handleChoosePath()">Choose Location</button>
                         </div>
                     </div>
                     <div class="error" id="pathError"></div>
@@ -184,20 +185,32 @@ export class SettingsManager {
                     <input type="checkbox" id="autoCleanupAfterCommit" ${autoCleanupAfterCommit ? 'checked' : ''}>
                     <label for="autoCleanupAfterCommit" class="checkbox-label">Auto-cleanup versions after git commit (keeps latest version with commit message)</label>
                 </div>
+                <div class="button-container" style="margin-top: 24px;">
+                    <button class="button" onclick="handleQuickClean()">Quick Clean</button>
+                    <button class="button" onclick="handleClearAll()">Clear All Versions</button>
+                </div>
             </div>
             <script>
                 const vscode = acquireVsCodeApi();
                 
-                function choosePath() {
+                function handleChoosePath() {
                     vscode.postMessage({ command: 'changeLocation' });
                 }
 
-                function savePath() {
+                function handleSavePath() {
                     const input = document.getElementById('pathInput');
                     vscode.postMessage({ 
                         command: 'updatePath',
                         path: input.value
                     });
+                }
+
+                function handleQuickClean() {
+                    vscode.postMessage({ command: 'quickClean' });
+                }
+
+                function handleClearAll() {
+                    vscode.postMessage({ command: 'clearAll' });
                 }
 
                 document.getElementById('saveAllChanges').addEventListener('change', (event) => {
@@ -271,6 +284,12 @@ export class SettingsManager {
                         break;
                     case 'updateAutoCleanupAfterCommit':
                         await this.setAutoCleanupAfterCommit(message.value);
+                        break;
+                    case 'quickClean':
+                        await vscode.commands.executeCommand('llmcheckpoint.quickClean');
+                        break;
+                    case 'clearAll':
+                        await vscode.commands.executeCommand('llmcheckpoint.clearAll');
                         break;
                 }
             },

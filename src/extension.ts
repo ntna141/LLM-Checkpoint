@@ -136,6 +136,45 @@ export async function activate(context: vscode.ExtensionContext) {
 				} else {
 					vscode.window.showErrorMessage('No version information found');
 				}
+			}),
+			vscode.commands.registerCommand('llmcheckpoint.quickClean', async () => {
+				const result = await vscode.window.showWarningMessage(
+					'This will keep only the latest version of each file and delete all older versions. This action cannot be undone.',
+					{ modal: true },
+					'Yes'
+				);
+				if (result === 'Yes') {
+					const files = fileVersionDB.getAllFiles();
+					for (const file of files) {
+						const versions = fileVersionDB.getFileVersions(file.id);
+						if (versions.length > 1) {
+							// Keep only the latest version
+							for (let i = 1; i < versions.length; i++) {
+								fileVersionDB.deleteVersion(versions[i].id);
+							}
+						}
+					}
+					versionTreeProvider.refresh();
+					await settingsManager.showConditionalInfoMessage('Kept only latest versions');
+				}
+			}),
+			vscode.commands.registerCommand('llmcheckpoint.clearAll', async () => {
+				const result = await vscode.window.showWarningMessage(
+					'Are you sure you want to delete all versions? This cannot be undone.',
+					{ modal: true },
+					'Yes'
+				);
+				if (result === 'Yes') {
+					const files = fileVersionDB.getAllFiles();
+					for (const file of files) {
+						const versions = fileVersionDB.getFileVersions(file.id);
+						for (const version of versions) {
+							fileVersionDB.deleteVersion(version.id);
+						}
+					}
+					versionTreeProvider.refresh();
+					await settingsManager.showConditionalInfoMessage('All versions cleared');
+				}
 			})
 		];
 

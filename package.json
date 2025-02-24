@@ -52,6 +52,11 @@
           "command": "llmcheckpoint.openSettings",
           "when": "view == llmcheckpointVersions",
           "group": "navigation@1"
+        },
+        {
+          "command": "llmcheckpoint.quickClean",
+          "when": "view == llmcheckpointVersions",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -69,6 +74,16 @@
           "command": "llmcheckpoint.appendVersion",
           "when": "view == llmcheckpointVersions && viewItem == version",
           "group": "inline"
+        },
+        {
+          "command": "llmcheckpoint.quickClean",
+          "when": "view == llmcheckpointVersions",
+          "group": "navigation@2"
+        },
+        {
+          "command": "llmcheckpoint.clearAll",
+          "when": "view == llmcheckpointVersions",
+          "group": "navigation@2"
         }
       ],
       "editor/title": [
@@ -108,6 +123,16 @@
         "command": "llmcheckpoint.appendVersion",
         "title": "Append Version",
         "icon": "$(add)"
+      },
+      {
+        "command": "llmcheckpoint.quickClean",
+        "title": "Quick Clean",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "llmcheckpoint.clearAll",
+        "title": "Clear All Versions",
+        "icon": "$(trash)"
       }
     ],
     "keybindings": [
