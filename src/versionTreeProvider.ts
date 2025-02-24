@@ -3,7 +3,6 @@ import { FileVersionDB } from './db';
 import { FileRecord, VersionRecord } from './db/schema';
 import * as fs from 'fs';
 import * as path from 'path';
-import { TreeItem, TreeItemCollapsibleState, ThemeIcon } from 'vscode';
 import { SettingsManager } from './settings';
 
 
@@ -43,8 +42,10 @@ export function registerVersionProvider(context: vscode.ExtensionContext) {
 }
 
 export class VersionTreeItem extends vscode.TreeItem {
+    public backgroundColor?: vscode.ThemeColor;
+    
     constructor(
-        public readonly label: string,
+        public readonly label: string | vscode.TreeItemLabel,
         public readonly collapsibleState: vscode.TreeItemCollapsibleState,
         public readonly file?: FileRecord,
         public readonly version?: VersionRecord,
@@ -73,9 +74,13 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
     private fileItems: Map<string, VersionTreeItem> = new Map();
     private isRefreshing = false;
     private isReady: boolean = false;
+    private activeFilePath: string | undefined;
 
-    constructor(private fileVersionDB: FileVersionDB) {
-        
+    constructor(
+        private fileVersionDB: FileVersionDB,
+        private settingsManager: SettingsManager
+    ) {
+        this.activeFilePath = undefined;
     }
 
     setTreeView(treeView: vscode.TreeView<VersionTreeItem>) {
@@ -118,13 +123,11 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
 
     
     setupEditorTracking() {
-        
-        
-        
         this.disposables.push(
             vscode.window.onDidChangeActiveTextEditor(editor => {
                 if (editor && !editor.document.uri.path.includes('.git/')) {
                     const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
+                    this.activeFilePath = relativePath;
                     if (this.isReady) {
                         this.expandFile(relativePath, true);
                     }
@@ -204,9 +207,7 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
     }
 
     async getChildren(element?: VersionTreeItem): Promise<VersionTreeItem[]> {
-        
         if (!element) {
-            
             const allFiles = this.fileVersionDB.getAllFiles();
             const filesWithVersions = allFiles.filter(file => {
                 const versions = this.fileVersionDB.getFileVersions(file.id);
@@ -226,38 +227,67 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
                 const fileName = path.basename(relativePath);
                 const dirPath = path.dirname(relativePath);
                 
+                const isActive = relativePath === this.activeFilePath;
+                
                 const treeItem = new VersionTreeItem(
-                    fileName,  
+                    isActive ? {
+                        label: fileName,
+                        highlights: [[0, fileName.length]]
+                    } : fileName,
                     shouldExpand ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
                     file,
                     undefined,
                     versions
                 );
                 
-                
-                treeItem.description = dirPath === '.' ? undefined : dirPath;
+                if (isActive) {
+                    treeItem.description = dirPath === '.' ? undefined : dirPath;
+                } else {
+                    treeItem.description = dirPath === '.' ? undefined : dirPath;
+                }
                 
                 this.fileItems.set(relativePath, treeItem);
                 return treeItem;
             });
         } else if (element.file) {
             const versions = element.versions || this.fileVersionDB.getFileVersions(element.file.id);
+            const showTimestamps = await this.settingsManager.getShowTimestamps();
+            
             return versions.map((version, index) => {
                 const timeAgo = index + 1;
                 const promptText = timeAgo === 1 ? 'prompt' : 'prompts';
                 
-                // Check if content starts with a Git commit message
                 const commitMatch = version.content.match(/\/\* Git commit: (.*?) \*\//);
-                const label = commitMatch 
-                    ? `${commitMatch[1]}`
-                    : `${timeAgo} ${promptText} ago`;
+                let label: string;
+                
+                if (commitMatch) {
+                    label = `${commitMatch[1]}`;
+                } else {
+                    label = `${timeAgo} ${promptText} ago`;
+                }
 
-                return new VersionTreeItem(
+                const treeItem = new VersionTreeItem(
                     label,
                     vscode.TreeItemCollapsibleState.None,
                     element.file,
                     version
                 );
+                
+                if (showTimestamps) {
+                    const date = new Date(version.timestamp);
+                    treeItem.description = `${date.toLocaleString(undefined, {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                    })} ${date.toLocaleString(undefined, {
+                        year: 'numeric',
+                        month: 'numeric',
+                        day: 'numeric'
+                    })}`;
+                }
+                
+                treeItem.iconPath = new vscode.ThemeIcon('git-commit');
+                return treeItem;
             });
         }
         return [];

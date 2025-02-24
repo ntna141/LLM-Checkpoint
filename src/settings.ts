@@ -6,6 +6,7 @@ export class SettingsManager {
     private static readonly SAVE_ALL_CHANGES_KEY = 'saveAllChanges';
     private static readonly SHOW_INFO_MESSAGES_KEY = 'showInfoMessages';
     private static readonly AUTO_CLEANUP_AFTER_COMMIT_KEY = 'autoCleanupAfterCommit';
+    private static readonly SHOW_TIMESTAMPS_KEY = 'showTimestamps';
     private panel: vscode.WebviewPanel | undefined;
 
     constructor(private context: vscode.ExtensionContext) {}
@@ -32,6 +33,11 @@ export class SettingsManager {
         return workspaceState.get<boolean>(SettingsManager.AUTO_CLEANUP_AFTER_COMMIT_KEY, true);
     }
 
+    async getShowTimestamps(): Promise<boolean> {
+        const workspaceState = this.context.workspaceState;
+        return workspaceState.get<boolean>(SettingsManager.SHOW_TIMESTAMPS_KEY, true);
+    }
+
     async setSaveAllChanges(value: boolean): Promise<void> {
         await this.context.workspaceState.update(SettingsManager.SAVE_ALL_CHANGES_KEY, value);
         if (this.panel) {
@@ -48,6 +54,13 @@ export class SettingsManager {
 
     async setAutoCleanupAfterCommit(value: boolean): Promise<void> {
         await this.context.workspaceState.update(SettingsManager.AUTO_CLEANUP_AFTER_COMMIT_KEY, value);
+        if (this.panel) {
+            this.panel.webview.html = await this.getWebviewContent();
+        }
+    }
+
+    async setShowTimestamps(value: boolean): Promise<void> {
+        await this.context.workspaceState.update(SettingsManager.SHOW_TIMESTAMPS_KEY, value);
         if (this.panel) {
             this.panel.webview.html = await this.getWebviewContent();
         }
@@ -72,6 +85,7 @@ export class SettingsManager {
         const saveAllChanges = await this.getSaveAllChanges();
         const showInfoMessages = await this.getShowInfoMessages();
         const autoCleanupAfterCommit = await this.getAutoCleanupAfterCommit();
+        const showTimestamps = await this.getShowTimestamps();
         return `<!DOCTYPE html>
         <html>
         <head>
@@ -178,6 +192,10 @@ export class SettingsManager {
                     <input type="checkbox" id="autoCleanupAfterCommit" ${autoCleanupAfterCommit ? 'checked' : ''}>
                     <label for="autoCleanupAfterCommit" class="checkbox-label">Auto-cleanup versions after git commit (keeps latest version with commit message)</label>
                 </div>
+                <div class="checkbox-container">
+                    <input type="checkbox" id="showTimestamps" ${showTimestamps ? 'checked' : ''}>
+                    <label for="showTimestamps" class="checkbox-label">Show timestamps next to version entries</label>
+                </div>
                 <div class="button-container" style="margin-top: 24px;">
                     <button class="button" onclick="handleQuickClean()">Quick Clean</button>
                     <button class="button" onclick="handleClearAll()">Clear All Versions</button>
@@ -223,6 +241,13 @@ export class SettingsManager {
                 document.getElementById('autoCleanupAfterCommit').addEventListener('change', (event) => {
                     vscode.postMessage({
                         command: 'updateAutoCleanupAfterCommit',
+                        value: event.target.checked
+                    });
+                });
+
+                document.getElementById('showTimestamps').addEventListener('change', (event) => {
+                    vscode.postMessage({
+                        command: 'updateShowTimestamps',
                         value: event.target.checked
                     });
                 });
@@ -277,6 +302,9 @@ export class SettingsManager {
                         break;
                     case 'updateAutoCleanupAfterCommit':
                         await this.setAutoCleanupAfterCommit(message.value);
+                        break;
+                    case 'updateShowTimestamps':
+                        await this.setShowTimestamps(message.value);
                         break;
                     case 'quickClean':
                         await vscode.commands.executeCommand('llmcheckpoint.quickClean');

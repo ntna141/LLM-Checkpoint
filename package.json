@@ -2,7 +2,7 @@
   "name": "llmcheckpoint",
   "displayName": "LLM Checkpoint",
   "description": "Provide checkpoint context to LLM coding assistants",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "repository": {
     "type": "git",
     "url": "https://github.com/ntna141/Quick-Checkpoint"
@@ -31,6 +31,11 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically cleanup versions after git commit, keeping only the latest version renamed with the commit message"
+        },
+        "llmcheckpoint.showTimestamps": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show timestamps next to version entries in the version tree"
         }
       }
     },

@@ -77,7 +77,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		
 		initializeProviders(fileVersionDB, settingsManager);
 		
-		versionTreeProvider = new VersionTreeProvider(fileVersionDB);
+		versionTreeProvider = new VersionTreeProvider(fileVersionDB, settingsManager);
 		const treeView = vscode.window.createTreeView('llmcheckpointVersions', {
 			treeDataProvider: versionTreeProvider,
 			showCollapseAll: false
