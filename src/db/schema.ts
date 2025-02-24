@@ -18,16 +18,17 @@ export interface VersionRecord {
 }
 
 export async function initializeDatabase(context: vscode.ExtensionContext): Promise<Database> {
-    const dbPath = path.join(context.globalStoragePath, 'file_versions.db');
+    if (!context.globalStorageUri) {
+        throw new Error('Global storage URI is not available');
+    }
     
+    const dbPath = path.join(context.globalStorageUri.fsPath, 'file_versions.db');
     
-    if (!fs.existsSync(context.globalStoragePath)) {
-        fs.mkdirSync(context.globalStoragePath, { recursive: true });
+    if (!fs.existsSync(context.globalStorageUri.fsPath)) {
+        fs.mkdirSync(context.globalStorageUri.fsPath, { recursive: true });
     }
 
-    
     const SQL = await initSqlJs();
-    
     
     let db: Database;
     if (fs.existsSync(dbPath)) {
@@ -37,10 +38,8 @@ export async function initializeDatabase(context: vscode.ExtensionContext): Prom
         db = new SQL.Database();
     }
 
-    
     db.run('PRAGMA foreign_keys = ON');
 
-    
     db.run(`
         CREATE TABLE IF NOT EXISTS files (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,7 +67,6 @@ export async function initializeDatabase(context: vscode.ExtensionContext): Prom
         CREATE INDEX IF NOT EXISTS idx_versions_timestamp ON versions(timestamp);
     `);
 
-    
     const data = db.export();
     fs.writeFileSync(dbPath, Buffer.from(data));
 

@@ -29,6 +29,8 @@ export async function activate(context: vscode.ExtensionContext) {
 			treeDataProvider: versionTreeProvider,
 			showCollapseAll: true
 		});
+		versionTreeProvider.setTreeView(treeView);
+		versionTreeProvider.setupEditorTracking();
 		console.log('Tree view provider created');
 
 		
@@ -79,29 +81,33 @@ export async function activate(context: vscode.ExtensionContext) {
 		
 		
 		const onSaveDisposable = vscode.workspace.onWillSaveTextDocument(async (e) => {
-			console.log(`File about to be saved: ${e.document.uri.toString()}`);
-			const relativePath = vscode.workspace.asRelativePath(e.document.uri);
-			const content = e.document.getText();
+			try {
+				console.log(`File about to be saved: ${e.document.uri.toString()}`);
+				const relativePath = vscode.workspace.asRelativePath(e.document.uri);
+				const content = e.document.getText();
 
-			let file = fileVersionDB.getFile(relativePath);
-			if (!file) {
-				console.log('Creating new file record for:', relativePath);
-				file = fileVersionDB.createFile(relativePath);
+				let file = fileVersionDB.getFile(relativePath);
+				if (!file) {
+					console.log('Creating new file record for:', relativePath);
+					file = fileVersionDB.createFile(relativePath);
+				}
+
+				const versions = fileVersionDB.getFileVersions(file.id, 1);
+				if (versions.length > 0 && versions[0].content === content) {
+					console.log('Content unchanged from last version, skipping');
+					return;
+				}
+
+				console.log('Creating new version for file:', relativePath);
+				const version = fileVersionDB.createVersion(file.id, content);
+				console.log(`Created version ${version.version_number} for file:`, relativePath);
+				
+				setTimeout(() => {
+					versionTreeProvider.refresh(relativePath);
+				}, 100);
+			} catch (error) {
+				console.error('Error in save handler:', error);
 			}
-
-			
-			const versions = fileVersionDB.getFileVersions(file.id, 1);
-			if (versions.length > 0 && versions[0].content === content) {
-				console.log('Content unchanged from last version, skipping');
-				return;
-			}
-
-			console.log('Creating new version for file:', relativePath);
-			const version = fileVersionDB.createVersion(file.id, content);
-			console.log(`Created version ${version.version_number} for file:`, relativePath);
-			
-			
-			versionTreeProvider.refresh(relativePath);
 		});
 
 		
@@ -120,7 +126,8 @@ export async function activate(context: vscode.ExtensionContext) {
 			fileWatcherDisposable,
 			onSaveDisposable,  
 			watcher,
-			treeView
+			treeView,
+			versionTreeProvider
 		);
 
 		console.log('LLMCheckpoint extension activated successfully!');
