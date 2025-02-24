@@ -1,71 +1,100 @@
-# llmcheckpoint README
+# Quick Checkpoint
 
-This is the README for your extension "llmcheckpoint". After writing up a brief description, we recommend including the following sections.
+Quick Checkpoint is a VS Code extension that helps you use code history as context when working with AI coding assistants. It is useful for quick checkpoint as context to help undo when LLMs break your code.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+### Version Management
+- **Automatic Version Saving**: Automatically saves versions of your code as you make changes
+- **Smart Detection**: Only saves significant changes to avoid cluttering your history, automatically remove old versions on new commit
+- **Version Tree View**: Dedicated sidebar showing all tracked files and their versions
+- **Git Integration**: Preserves commit messages and can clean up versions after commits
 
-For example if there is an image subfolder under your extension project workspace:
+### Quick Actions
+- View, export, or delete specific versions
+- Quick clean to keep only latest versions
+- Append multiple versions to build context history
 
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+### Context Management
+- Export versions to provide context to AI assistants
+- Append multiple versions to build comprehensive context
+- Track version history relative to prompts ("1 prompt ago", "2 prompts ago")
+- Preserve git commit messages in version history
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- VS Code version 1.95.0 or higher
+- Git Intergration
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
 This extension contributes the following settings:
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+* `llmcheckpoint.showInfoMessages`: Enable/disable information messages for operations like saving, exporting, and deleting versions
+* `llmcheckpoint.autoCleanupAfterCommit`: Automatically cleanup versions after git commit, keeping only the latest version renamed with the commit message
+
+## Using the Extension
+
+1. **Save Versions**:
+   - Automatically saves when you make significant changes
+   - Click the "Save Version" button in the editor title bar
+
+2. **View History**:
+   - Open the Quick Checkpoint sidebar (clock icon)
+   - Click versions to view their contents
+
+3. **Manage Versions**:
+   - Export versions for LLM context
+   - Append multiple versions together
+   - Quick clean to keep only latest versions
+   - Delete individual versions or clear all
+
+4. **Git Integration**:
+   - Versions are tagged with commit messages when available
+   - Optional automatic cleanup after commits
+   - Preserves version history alongside git history
 
 ## Known Issues
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+Please report any issues on our [GitHub repository](https://github.com/ntna141/Quick-Checkpoint).
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
+### 0.0.1
 
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+- Initial release
+- Basic version management
+- Git integration
+- Version tree view
+- Export and append functionality
+- Quick clean features
 
 ---
 
-## Following extension guidelines
+## Contributing
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+Found a bug or have a feature request? Please open an issue on our [GitHub repository](https://github.com/ntna141/Quick-Checkpoint).
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+## License
 
-## Working with Markdown
+MIT License
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+Copyright (c) [2025] [NGWX Software]
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-## For more information
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

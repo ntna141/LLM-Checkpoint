@@ -1,8 +1,13 @@
 {
   "name": "llmcheckpoint",
-  "displayName": "LLMCheckpoint",
+  "displayName": "Quick Checkpoint",
   "description": "Provide checkpoint context to LLM coding assistants",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ntna141/Quick-Checkpoint"
+  },
+  "publisher": "QuickCheckpoint",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -10,12 +15,12 @@
     "Other"
   ],
   "activationEvents": [
-    "*"
+    "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {
-      "title": "LLM Checkpoint",
+      "title": "Quick Checkpoint",
       "properties": {
         "llmcheckpoint.showInfoMessages": {
           "type": "boolean",
@@ -166,7 +171,6 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
-    "@types/diff": "^7.0.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/vscode": "^1.95.0",
