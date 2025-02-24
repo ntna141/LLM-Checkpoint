@@ -242,8 +242,8 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
             });
         } else if (element.file) {
             const versions = element.versions || this.fileVersionDB.getFileVersions(element.file.id);
-            return versions.map((version, index) => {
-                const timeAgo = versions.length - index;
+            return versions.slice().reverse().map((version, index) => {
+                const timeAgo = index + 1;
                 const promptText = timeAgo === 1 ? 'prompt' : 'prompts';
                 return new VersionTreeItem(
                     `${timeAgo} ${promptText} ago (${new Date(version.timestamp).toLocaleTimeString()}, ${new Date(version.timestamp).toLocaleDateString()})`,
@@ -331,7 +331,7 @@ async function writeVersionToFile(version: VersionRecord, file: FileRecord, fina
     }
 
     const finalFullPath = vscode.Uri.joinPath(workspaceFolder.uri, finalPath);
-    const content = `Version from ${finalPath}\n\n${version.content}`;
+    const content = `Version from ${file.file_path}\n\n${version.content}`;
     await fs.promises.writeFile(finalFullPath.fsPath, content, 'utf8');
 }
 
@@ -342,7 +342,7 @@ async function appendVersionToExistingFile(version: VersionRecord, file: FileRec
     }
 
     const finalFullPath = vscode.Uri.joinPath(workspaceFolder.uri, finalPath);
-    const newContent = `\n\nVersion from ${finalPath}\n\n${version.content}`;
+    const newContent = `\n\nVersion from ${file.file_path}\n\n${version.content}`;
     await fs.promises.appendFile(finalFullPath.fsPath, newContent, 'utf8');
 }
 
