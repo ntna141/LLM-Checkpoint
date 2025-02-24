@@ -1,0 +1,292 @@
+import * as vscode from 'vscode';
+import * as path from 'path';
+
+export class SettingsManager {
+    private static readonly HISTORY_PATH_KEY = 'historyContextPath';
+    private panel: vscode.WebviewPanel | undefined;
+
+    constructor(private context: vscode.ExtensionContext) {}
+
+    async getHistoryPath(): Promise<string> {
+        const workspaceState = this.context.workspaceState;
+        return workspaceState.get<string>(SettingsManager.HISTORY_PATH_KEY, 'history_context.txt');
+    }
+
+    async setHistoryPath(filePath: string): Promise<void> {
+        await this.context.workspaceState.update(SettingsManager.HISTORY_PATH_KEY, filePath);
+        // Update the webview if it's open
+        if (this.panel) {
+            this.panel.webview.html = await this.getWebviewContent();
+        }
+    }
+
+    private async getWebviewContent(): Promise<string> {
+        const currentPath = await this.getHistoryPath();
+        return `<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body {
+                    padding: 20px;
+                    font-family: var(--vscode-font-family);
+                    color: var(--vscode-foreground);
+                }
+                .container {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 16px;
+                    max-width: 600px;
+                }
+                .path-container {
+                    display: flex;
+                    gap: 8px;
+                    align-items: flex-start;
+                }
+                .path-input {
+                    flex-grow: 1;
+                    background: var(--vscode-input-background);
+                    color: var(--vscode-input-foreground);
+                    border: 1px solid var(--vscode-input-border);
+                    padding: 4px 8px;
+                    border-radius: 2px;
+                    font-family: var(--vscode-editor-font-family);
+                    font-size: var(--vscode-editor-font-size);
+                }
+                .path-input:focus {
+                    outline: 1px solid var(--vscode-focusBorder);
+                    border-color: var(--vscode-focusBorder);
+                }
+                .button {
+                    background: var(--vscode-button-background);
+                    color: var(--vscode-button-foreground);
+                    border: none;
+                    padding: 4px 8px;
+                    border-radius: 2px;
+                    cursor: pointer;
+                    font-size: 12px;
+                    white-space: nowrap;
+                    align-self: flex-start;
+                }
+                .button:hover {
+                    background: var(--vscode-button-hoverBackground);
+                }
+                .button-container {
+                    display: flex;
+                    gap: 8px;
+                }
+                .title {
+                    font-size: 13px;
+                    font-weight: 600;
+                    margin-bottom: 4px;
+                }
+                .error {
+                    color: var(--vscode-errorForeground);
+                    font-size: 12px;
+                    margin-top: 4px;
+                    display: none;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div>
+                    <div class="title">Export Location</div>
+                    <div class="path-container">
+                        <input type="text" class="path-input" id="pathInput" value="${currentPath}" 
+                               placeholder="Enter path relative to workspace root">
+                        <div class="button-container">
+                            <button class="button" onclick="savePath()">Save</button>
+                            <button class="button" onclick="choosePath()">Choose Location</button>
+                        </div>
+                    </div>
+                    <div class="error" id="pathError"></div>
+                </div>
+            </div>
+            <script>
+                const vscode = acquireVsCodeApi();
+                
+                function choosePath() {
+                    vscode.postMessage({ command: 'changeLocation' });
+                }
+
+                function savePath() {
+                    const input = document.getElementById('pathInput');
+                    vscode.postMessage({ 
+                        command: 'updatePath',
+                        path: input.value
+                    });
+                }
+
+                window.addEventListener('message', event => {
+                    const message = event.data;
+                    if (message.type === 'error') {
+                        const errorDiv = document.getElementById('pathError');
+                        errorDiv.textContent = message.message;
+                        errorDiv.style.display = 'block';
+                        setTimeout(() => {
+                            errorDiv.style.display = 'none';
+                        }, 5000);
+                    }
+                });
+            </script>
+        </body>
+        </html>`;
+    }
+
+    async showSettingsUI(): Promise<void> {
+        if (this.panel) {
+            this.panel.reveal();
+            return;
+        }
+
+        this.panel = vscode.window.createWebviewPanel(
+            'llmCheckpointSettings',
+            'LLM Checkpoint Settings',
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true
+            }
+        );
+
+        this.panel.webview.html = await this.getWebviewContent();
+
+        this.panel.webview.onDidReceiveMessage(
+            async (message) => {
+                switch (message.command) {
+                    case 'changeLocation':
+                        await this.showLocationPicker();
+                        break;
+                    case 'updatePath':
+                        await this.validateAndUpdatePath(message.path);
+                        break;
+                }
+            },
+            undefined,
+            this.context.subscriptions
+        );
+
+        this.panel.onDidDispose(
+            () => {
+                this.panel = undefined;
+            },
+            null,
+            this.context.subscriptions
+        );
+    }
+
+    private async showLocationPicker(): Promise<void> {
+        const currentPath = await this.getHistoryPath();
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        
+        if (!workspaceFolder) {
+            vscode.window.showErrorMessage('No workspace folder found');
+            return;
+        }
+
+        const options: vscode.OpenDialogOptions = {
+            canSelectFiles: false,
+            canSelectFolders: true,
+            canSelectMany: false,
+            openLabel: 'Select Export Location',
+            defaultUri: vscode.Uri.joinPath(workspaceFolder.uri, path.dirname(currentPath))
+        };
+
+        const folderUri = await vscode.window.showOpenDialog(options);
+        if (!folderUri || folderUri.length === 0) {
+            return;
+        }
+
+        const fileName = await vscode.window.showInputBox({
+            prompt: 'Enter the file name for version history',
+            value: path.basename(currentPath),
+            validateInput: (value) => {
+                if (!value) {
+                    return 'File name cannot be empty';
+                }
+                return null;
+            }
+        });
+
+        if (!fileName) {
+            return;
+        }
+
+        const relativePath = vscode.workspace.asRelativePath(
+            vscode.Uri.joinPath(folderUri[0], fileName)
+        );
+        
+        await this.setHistoryPath(relativePath);
+        vscode.window.showInformationMessage(`Export location set to: ${relativePath}`);
+    }
+
+    private async validateAndUpdatePath(inputPath: string): Promise<void> {
+        try {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+                throw new Error('No workspace folder found');
+            }
+
+            // If path is empty or just whitespace, use default in root
+            if (!inputPath.trim()) {
+                await this.setHistoryPath('history_context.txt');
+                return;
+            }
+
+            // Clean up the path and ensure it's relative
+            let cleanPath = inputPath.trim();
+            if (path.isAbsolute(cleanPath)) {
+                cleanPath = path.relative(workspaceFolder.uri.fsPath, cleanPath);
+            }
+
+            // Create URI for the path
+            const fullUri = vscode.Uri.joinPath(workspaceFolder.uri, cleanPath);
+            
+            try {
+                // Check if the path exists and is a directory
+                const stats = await vscode.workspace.fs.stat(fullUri);
+                if ((stats.type & vscode.FileType.Directory) === vscode.FileType.Directory) {
+                    // If it's a directory, append the default filename
+                    cleanPath = path.join(cleanPath, 'history_context.txt');
+                    this.panel?.webview.postMessage({ 
+                        type: 'error',
+                        message: 'Path is a directory. Appending default filename: history_context.txt'
+                    });
+                }
+            } catch (error) {
+                // Path doesn't exist, check if parent directory exists
+                const parentDir = path.dirname(fullUri.fsPath);
+                try {
+                    await vscode.workspace.fs.stat(vscode.Uri.file(parentDir));
+                } catch (error) {
+                    // If parent directory doesn't exist, default to workspace root
+                    cleanPath = path.join('', path.basename(cleanPath));
+                    if (cleanPath.endsWith('/') || cleanPath.endsWith('\\')) {
+                        cleanPath = path.join(cleanPath, 'history_context.txt');
+                    }
+                    this.panel?.webview.postMessage({ 
+                        type: 'error',
+                        message: 'Directory not found. Path will be created in workspace root.'
+                    });
+                }
+            }
+
+            // Ensure the path has a filename
+            if (cleanPath.endsWith('/') || cleanPath.endsWith('\\') || !path.extname(cleanPath)) {
+                cleanPath = path.join(cleanPath, 'history_context.txt');
+            }
+
+            await this.setHistoryPath(cleanPath);
+            vscode.window.showInformationMessage(`Export location set to: ${cleanPath}`);
+        } catch (error) {
+            this.panel?.webview.postMessage({ 
+                type: 'error',
+                message: 'Invalid path. Please enter a valid relative path.'
+            });
+            // Default to workspace root with original filename
+            const defaultPath = path.join('', path.basename(inputPath) || 'history_context.txt');
+            await this.setHistoryPath(defaultPath);
+        }
+    }
+} 

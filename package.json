@@ -35,7 +35,7 @@
     "menus": {
       "view/title": [
         {
-          "command": "llmcheckpoint.refreshVersions",
+          "command": "llmcheckpoint.openSettings",
           "when": "view == llmcheckpointVersions",
           "group": "navigation"
         }
@@ -91,9 +91,9 @@
         "icon": "$(trash)"
       },
       {
-        "command": "llmcheckpoint.refreshVersions",
-        "title": "Refresh",
-        "icon": "$(refresh)"
+        "command": "llmcheckpoint.openSettings",
+        "title": "Settings",
+        "icon": "$(gear)"
       },
       {
         "command": "llmcheckpoint.appendVersion",

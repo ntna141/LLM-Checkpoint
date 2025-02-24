@@ -4,10 +4,12 @@ import { initializeDatabase } from './db/schema';
 import { VersionTreeProvider, exportVersionToFile, viewVersion, registerVersionProvider, appendVersionToFile } from './versionTreeProvider';
 import { VersionRecord } from './db/schema';
 import { VersionTreeItem } from './versionTreeProvider';
+import { SettingsManager } from './settings';
 import path from 'path';
 
 let fileVersionDB: FileVersionDB;
 let versionTreeProvider: VersionTreeProvider;
+let settingsManager: SettingsManager;
 
 export async function activate(context: vscode.ExtensionContext) {
 	console.log('Starting LLMCheckpoint activation...');
@@ -17,6 +19,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		console.log('Initializing database...');
 		const db = await initializeDatabase(context);
 		fileVersionDB = new FileVersionDB(db, context);
+		settingsManager = new SettingsManager(context);
 		console.log('Database initialized successfully');
 
 		
@@ -57,9 +60,8 @@ export async function activate(context: vscode.ExtensionContext) {
 					deleteVersion(item.version);
 				}
 			}),
-			vscode.commands.registerCommand('llmcheckpoint.refreshVersions', () => {
-				console.log('Refreshing versions view...');
-				versionTreeProvider.refresh();
+			vscode.commands.registerCommand('llmcheckpoint.openSettings', () => {
+				settingsManager.showSettingsUI();
 			}),
 			vscode.commands.registerCommand('llmcheckpoint.appendVersion', (item: VersionTreeItem) => {
 				if (item.version) {
@@ -272,7 +274,7 @@ async function exportVersion(version: VersionRecord) {
 			throw new Error(`File not found for file_id: ${version.file_id}`);
 		}
 		
-		const exportPath = 'history_context.txt';
+		const exportPath = await settingsManager.getHistoryPath();
 		await exportVersionToFile(version, exportPath);
 		vscode.window.showInformationMessage(`Version exported to ${exportPath}`);
 	} catch (error: any) {
@@ -304,7 +306,7 @@ async function appendVersion(version: VersionRecord) {
 			throw new Error(`File not found for file_id: ${version.file_id}`);
 		}
 		
-		const exportPath = 'history_context.txt';
+		const exportPath = await settingsManager.getHistoryPath();
 		await appendVersionToFile(version, exportPath);
 		vscode.window.showInformationMessage(`Version appended to ${exportPath}`);
 	} catch (error: any) {

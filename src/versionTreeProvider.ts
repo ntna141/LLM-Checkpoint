@@ -144,33 +144,45 @@ export async function exportVersionToFile(version: VersionRecord, filePath: stri
             targetPath: filePath
         });
         
-        
         if (!version.content) {
             throw new Error('Version content is missing or undefined');
         }
 
-        
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
             throw new Error('No workspace folder found');
         }
 
-        
+        // Ensure the path has a filename if it's a directory
+        let finalPath = filePath;
         const fullPath = vscode.Uri.joinPath(workspaceFolder.uri, filePath);
-        console.log('Full export path:', fullPath.fsPath);
         
+        try {
+            const stats = await vscode.workspace.fs.stat(fullPath);
+            if ((stats.type & vscode.FileType.Directory) === vscode.FileType.Directory) {
+                // If it's a directory, append the default filename
+                finalPath = path.join(filePath, 'history_context.txt');
+            }
+        } catch (error) {
+            // Path doesn't exist, check if it ends with a directory separator
+            if (filePath.endsWith('/') || filePath.endsWith('\\')) {
+                finalPath = path.join(filePath, 'history_context.txt');
+            }
+        }
+
+        // Get the final full path with any adjustments
+        const finalFullPath = vscode.Uri.joinPath(workspaceFolder.uri, finalPath);
+        console.log('Full export path:', finalFullPath.fsPath);
         
-        const directory = path.dirname(fullPath.fsPath);
+        // Create directory if it doesn't exist
+        const directory = path.dirname(finalFullPath.fsPath);
         await fs.promises.mkdir(directory, { recursive: true });
         
+        const content = `Version from ${finalPath}\n\n${version.content}`;
         
-        const content = `Version from ${filePath}\n\n${version.content}`;
+        await fs.promises.writeFile(finalFullPath.fsPath, content, 'utf8');
         
-        
-        await fs.promises.writeFile(fullPath.fsPath, content, 'utf8');
-        
-        
-        vscode.window.showInformationMessage(`Version exported successfully to ${filePath}`);
+        vscode.window.showInformationMessage(`Version exported successfully to ${finalPath}`);
         console.log('Version exported successfully');
     } catch (error: any) {
         console.error('Error details:', {
@@ -248,16 +260,36 @@ export async function appendVersionToFile(version: VersionRecord, filePath: stri
             throw new Error('No workspace folder found');
         }
 
+        // Ensure the path has a filename if it's a directory
+        let finalPath = filePath;
         const fullPath = vscode.Uri.joinPath(workspaceFolder.uri, filePath);
-        const directory = path.dirname(fullPath.fsPath);
+        
+        try {
+            const stats = await vscode.workspace.fs.stat(fullPath);
+            if ((stats.type & vscode.FileType.Directory) === vscode.FileType.Directory) {
+                // If it's a directory, append the default filename
+                finalPath = path.join(filePath, 'history_context.txt');
+            }
+        } catch (error) {
+            // Path doesn't exist, check if it ends with a directory separator
+            if (filePath.endsWith('/') || filePath.endsWith('\\')) {
+                finalPath = path.join(filePath, 'history_context.txt');
+            }
+        }
+
+        // Get the final full path with any adjustments
+        const finalFullPath = vscode.Uri.joinPath(workspaceFolder.uri, finalPath);
+        
+        // Create directory if it doesn't exist
+        const directory = path.dirname(finalFullPath.fsPath);
         await fs.promises.mkdir(directory, { recursive: true });
 
-        const newContent = `\n\nVersion from ${filePath}\n\n${version.content}`;
+        const newContent = `\n\nVersion from ${finalPath}\n\n${version.content}`;
         
         // Append to file, create if doesn't exist
-        await fs.promises.appendFile(fullPath.fsPath, newContent, 'utf8');
+        await fs.promises.appendFile(finalFullPath.fsPath, newContent, 'utf8');
         
-        vscode.window.showInformationMessage(`Version appended to ${filePath}`);
+        vscode.window.showInformationMessage(`Version appended to ${finalPath}`);
     } catch (error: any) {
         console.error('Error appending version:', error);
         throw error;
