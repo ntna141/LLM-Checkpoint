@@ -37,7 +37,7 @@
         {
           "command": "llmcheckpoint.openSettings",
           "when": "view == llmcheckpointVersions",
-          "group": "navigation"
+          "group": "navigation@1"
         }
       ],
       "view/item/context": [

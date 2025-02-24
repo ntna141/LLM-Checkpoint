@@ -12,42 +12,30 @@ let versionTreeProvider: VersionTreeProvider;
 let settingsManager: SettingsManager;
 
 export async function activate(context: vscode.ExtensionContext) {
-	console.log('Starting LLMCheckpoint activation...');
 
 	try {
 		
-		console.log('Initializing database...');
 		const db = await initializeDatabase(context);
 		fileVersionDB = new FileVersionDB(db, context);
 		settingsManager = new SettingsManager(context);
-		console.log('Database initialized successfully');
-
 		
-		console.log('Setting up tree view provider...');
 		versionTreeProvider = new VersionTreeProvider(fileVersionDB);
 		const treeView = vscode.window.createTreeView('llmcheckpointVersions', {
 			treeDataProvider: versionTreeProvider,
-			showCollapseAll: true
+			showCollapseAll: false
 		});
 		versionTreeProvider.setTreeView(treeView);
 		versionTreeProvider.setupEditorTracking();
-		console.log('Tree view provider created');
 
 		
 		registerVersionProvider(context);
-		console.log('Version content provider registered');
-
-		
-		console.log('Registering commands...');
 		const commands = [
 			vscode.commands.registerCommand('llmcheckpoint.saveVersion', async () => {
-				console.log('Save version command triggered');
 				await saveCurrentVersion();
 			}),
 			vscode.commands.registerCommand('llmcheckpoint.showVersionHistory', showVersionHistory),
 			vscode.commands.registerCommand('llmcheckpoint.restoreVersion', restoreVersion),
 			vscode.commands.registerCommand('llmcheckpoint.viewVersion', (version) => {
-				console.log('View command triggered with:', version);
 				return viewVersion(version, fileVersionDB);
 			}),
 			vscode.commands.registerCommand('llmcheckpoint.exportVersion', (item: VersionTreeItem) => {
@@ -73,35 +61,25 @@ export async function activate(context: vscode.ExtensionContext) {
 				}
 			})
 		];
-		console.log('Commands registered');
 
-		
-		console.log('Setting up file watcher...');
 		const watcher = vscode.workspace.createFileSystemWatcher('**/*');
 		
 		
 		const onSaveDisposable = vscode.workspace.onWillSaveTextDocument(async (e) => {
 			try {
-				console.log(`File about to be saved: ${e.document.uri.toString()}`);
 				const relativePath = vscode.workspace.asRelativePath(e.document.uri);
 				const content = e.document.getText();
 
 				let file = fileVersionDB.getFile(relativePath);
 				if (!file) {
-					console.log('Creating new file record for:', relativePath);
 					file = fileVersionDB.createFile(relativePath);
 				}
 
 				const versions = fileVersionDB.getFileVersions(file.id, 1);
 				if (versions.length > 0 && versions[0].content === content) {
-					console.log('Content unchanged from last version, skipping');
 					return;
 				}
 
-				console.log('Creating new version for file:', relativePath);
-				const version = fileVersionDB.createVersion(file.id, content);
-				console.log(`Created version ${version.version_number} for file:`, relativePath);
-				
 				setTimeout(() => {
 					versionTreeProvider.refresh(relativePath);
 				}, 100);
@@ -112,7 +90,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
 		
 		const fileWatcherDisposable = watcher.onDidChange(async (uri) => {
-			console.log(`File changed: ${uri.toString()}`);
 			const openTextDocuments = vscode.workspace.textDocuments;
 			if (openTextDocuments.some(doc => doc.uri.toString() === uri.toString())) {
 				await handleFileChange(uri);
@@ -140,7 +117,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
 async function handleFileChange(uri: vscode.Uri) {
 	try {
-		console.log('File changed:', uri.toString());
 		versionTreeProvider.refresh();
 	} catch (error) {
 		console.error('Error handling file change:', error);
@@ -170,8 +146,6 @@ async function saveCurrentVersion() {
 		}
 
 		const version = fileVersionDB.createVersion(file.id, content);
-		console.log(`Created version ${version.version_number} for file:`, relativePath);
-		
 		
 		versionTreeProvider.refresh(relativePath);
 		vscode.window.showInformationMessage(`Version ${version.version_number} saved`);

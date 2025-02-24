@@ -80,7 +80,7 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
     setTreeView(treeView: vscode.TreeView<VersionTreeItem>) {
         this.treeView = treeView;
         
-        // Listen for expansion events to track state
+        
         this.disposables.push(
             treeView.onDidExpandElement(e => {
                 if (e.element.file) {
@@ -97,7 +97,7 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
             treeView.onDidChangeVisibility(async () => {
                 if (treeView.visible) {
                     console.log('Tree view became visible');
-                    // Only handle the current file when the user explicitly opens the view
+                    
                     const editor = vscode.window.activeTextEditor;
                     if (editor && !editor.document.uri.path.includes('.git/')) {
                         const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
@@ -107,7 +107,7 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
             })
         );
 
-        // Mark as ready immediately and trigger initial population
+        
         console.log('Tree view is now ready');
         this.isReady = true;
         this._onDidChangeTreeData.fire();
@@ -122,11 +122,11 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
         }
     }
 
-    // Track active editor changes
+    
     setupEditorTracking() {
-        // Don't handle initial editor here anymore, it's done in setTreeView
         
-        // Listen for active editor changes
+        
+        
         this.disposables.push(
             vscode.window.onDidChangeActiveTextEditor(editor => {
                 if (editor && !editor.document.uri.path.includes('.git/')) {
@@ -160,12 +160,12 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
         
         if (versions.length > 0) {
             const wasExpanded = this.expandedFiles.has(filePath);
-            // Always expand if this is the first version (versions.length === 1) or if forced
+            
             if (!wasExpanded || forceExpand || versions.length === 1) {
                 try {
                     this.isRefreshing = true;
                     
-                    // Create the tree item first
+                    
                     const treeItem = new VersionTreeItem(
                         filePath,
                         vscode.TreeItemCollapsibleState.Expanded,
@@ -176,7 +176,7 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
                     this.fileItems.set(filePath, treeItem);
                     this.expandedFiles.add(filePath);
 
-                    // Just refresh the tree data without revealing
+                    
                     this._onDidChangeTreeData.fire();
                 } finally {
                     this.isRefreshing = false;
@@ -201,7 +201,7 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
             console.log('Refreshing tree view...', filePath ? `for file: ${filePath}` : 'full refresh');
             
             if (filePath) {
-                // Force expand when refreshing a specific file
+                
                 this.expandFile(filePath, true);
             } else {
                 this.fileItems.clear();
@@ -221,61 +221,67 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
         console.log('Getting children for tree view...', element ? `Parent: ${element.label}` : 'Root level');
         
         if (!element) {
-            // Root level - return all files
+            // Get all files and filter out those without versions
             const allFiles = this.fileVersionDB.getAllFiles();
-            console.log(`Found ${allFiles.length} files in database`);
+            const filesWithVersions = allFiles.filter(file => {
+                const versions = this.fileVersionDB.getFileVersions(file.id);
+                return versions.length > 0;
+            });
             
-            return allFiles.map(file => {
+            console.log(`Found ${filesWithVersions.length} files with versions (from ${allFiles.length} total)`);
+            
+            return filesWithVersions.map(file => {
                 const relativePath = file.file_path;
                 const versions = this.fileVersionDB.getFileVersions(file.id);
                 
-                // Auto-expand files with versions on first load
                 let shouldExpand = this.expandedFiles.has(relativePath);
-                if (!shouldExpand && this.isReady && versions.length > 0) {
+                if (!shouldExpand && this.isReady) {
                     console.log(`Auto-expanding file with versions: ${relativePath}`);
                     this.expandedFiles.add(relativePath);
                     shouldExpand = true;
                 }
                 
-                console.log(`Processing file: ${relativePath}, found ${versions.length} versions, expanded: ${shouldExpand}`);
+                const fileName = path.basename(relativePath);
+                const dirPath = path.dirname(relativePath);
                 
                 const treeItem = new VersionTreeItem(
-                    relativePath,
-                    versions.length > 0 
-                        ? (shouldExpand ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed)
-                        : vscode.TreeItemCollapsibleState.None,
+                    fileName,  // Just show the filename as the label
+                    shouldExpand ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
                     file,
                     undefined,
                     versions
                 );
                 
-                // Store the file item for reveal operations
+                // Add description to show the path in a lighter font
+                treeItem.description = dirPath === '.' ? undefined : dirPath;
+                
                 this.fileItems.set(relativePath, treeItem);
                 return treeItem;
             });
         } else if (element.file) {
-            // File level - return versions
             const versions = element.versions || this.fileVersionDB.getFileVersions(element.file.id);
-            return versions.map(version => 
-                new VersionTreeItem(
-                    `Version ${version.version_number} (${new Date(version.timestamp).toLocaleString()})`,
+            return versions.map((version, index) => {
+                const timeAgo = versions.length - index;
+                const promptText = timeAgo === 1 ? 'prompt' : 'prompts';
+                return new VersionTreeItem(
+                    `${timeAgo} ${promptText} ago (${new Date(version.timestamp).toLocaleTimeString()}, ${new Date(version.timestamp).toLocaleDateString()})`,
                     vscode.TreeItemCollapsibleState.None,
                     element.file,
                     version
-                )
-            );
+                );
+            });
         }
         return [];
     }
 
     async getParent(element: VersionTreeItem): Promise<VersionTreeItem | undefined> {
         if (element.version && element.file) {
-            // For version items, return the parent file item
+            
             const parentItem = this.fileItems.get(element.file.file_path);
             if (parentItem) {
                 return parentItem;
             }
-            // If parent not found in cache, create it
+            
             return new VersionTreeItem(
                 element.file.file_path,
                 vscode.TreeItemCollapsibleState.Expanded,
@@ -307,28 +313,28 @@ export async function exportVersionToFile(version: VersionRecord, filePath: stri
             throw new Error('No workspace folder found');
         }
 
-        // Ensure the path has a filename if it's a directory
+        
         let finalPath = filePath;
         const fullPath = vscode.Uri.joinPath(workspaceFolder.uri, filePath);
         
         try {
             const stats = await vscode.workspace.fs.stat(fullPath);
             if ((stats.type & vscode.FileType.Directory) === vscode.FileType.Directory) {
-                // If it's a directory, append the default filename
+                
                 finalPath = path.join(filePath, 'history_context.txt');
             }
         } catch (error) {
-            // Path doesn't exist, check if it ends with a directory separator
+            
             if (filePath.endsWith('/') || filePath.endsWith('\\')) {
                 finalPath = path.join(filePath, 'history_context.txt');
             }
         }
 
-        // Get the final full path with any adjustments
+        
         const finalFullPath = vscode.Uri.joinPath(workspaceFolder.uri, finalPath);
         console.log('Full export path:', finalFullPath.fsPath);
         
-        // Create directory if it doesn't exist
+        
         const directory = path.dirname(finalFullPath.fsPath);
         await fs.promises.mkdir(directory, { recursive: true });
         
@@ -414,33 +420,33 @@ export async function appendVersionToFile(version: VersionRecord, filePath: stri
             throw new Error('No workspace folder found');
         }
 
-        // Ensure the path has a filename if it's a directory
+        
         let finalPath = filePath;
         const fullPath = vscode.Uri.joinPath(workspaceFolder.uri, filePath);
         
         try {
             const stats = await vscode.workspace.fs.stat(fullPath);
             if ((stats.type & vscode.FileType.Directory) === vscode.FileType.Directory) {
-                // If it's a directory, append the default filename
+                
                 finalPath = path.join(filePath, 'history_context.txt');
             }
         } catch (error) {
-            // Path doesn't exist, check if it ends with a directory separator
+            
             if (filePath.endsWith('/') || filePath.endsWith('\\')) {
                 finalPath = path.join(filePath, 'history_context.txt');
             }
         }
 
-        // Get the final full path with any adjustments
+        
         const finalFullPath = vscode.Uri.joinPath(workspaceFolder.uri, finalPath);
         
-        // Create directory if it doesn't exist
+        
         const directory = path.dirname(finalFullPath.fsPath);
         await fs.promises.mkdir(directory, { recursive: true });
 
         const newContent = `\n\nVersion from ${finalPath}\n\n${version.content}`;
         
-        // Append to file, create if doesn't exist
+        
         await fs.promises.appendFile(finalFullPath.fsPath, newContent, 'utf8');
         
         vscode.window.showInformationMessage(`Version appended to ${finalPath}`);
