@@ -63,14 +63,7 @@ export class SettingsManager {
     async showConditionalInfoMessage(message: string): Promise<void> {
         const showInfoMessages = await this.getShowInfoMessages();
         if (showInfoMessages) {
-            const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right);
-            statusBarItem.text = message;
-            statusBarItem.show();
-            
-            setTimeout(() => {
-                statusBarItem.hide();
-                statusBarItem.dispose();
-            }, 3500);
+            await vscode.window.showInformationMessage(message);
         }
     }
 
