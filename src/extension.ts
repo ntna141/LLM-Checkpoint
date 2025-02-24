@@ -21,34 +21,25 @@ const stagedChangesMap = new Map<string, { files: Set<string>, message: string }
 
 async function getLatestCommitMessage(workspacePath: string): Promise<string> {
 	try {
-		const { stdout } = await execAsync('git log -1 --pretty=format:"%s"', { cwd: workspacePath });
-		const message = stdout.trim();
-		
-		if (!message) {
-			console.error('Empty commit message received');
-			return '';
-		}
-
-		if (message === 'this') {
-			console.warn('Suspicious commit message "this" received, might indicate an error');
-		}
-
-		console.log(`Retrieved commit message: "${message}"`);
-		return message;
+		const { stdout } = await execAsync('git log -1 --pretty=%B', { cwd: workspacePath });
+		return stdout.trim();
 	} catch (error) {
 		console.error('Error getting commit message:', error);
 		return '';
 	}
 }
 
-async function handleGitCommit(workspacePath: string, repository: any, changedFiles: Set<string>) {
+async function handleGitCommit(workspacePath: string, repository: any, changedFiles: Set<string>, commitMessage?: string) {
 	try {
 		const autoCleanup = await settingsManager.getAutoCleanupAfterCommit();
 		if (!autoCleanup) {
 			return;
 		}
 
-		const commitMessage = await getLatestCommitMessage(workspacePath);
+		if (!commitMessage) {
+			commitMessage = await getLatestCommitMessage(workspacePath);
+		}
+		
 		if (!commitMessage) {
 			return;
 		}
@@ -61,12 +52,8 @@ async function handleGitCommit(workspacePath: string, repository: any, changedFi
 				const versions = fileVersionDB.getFileVersions(file.id);
 				if (versions.length > 0) {
 					const latestVersion = versions[0];
-					const hasGitComment = latestVersion.content.trimStart().startsWith('/* Git commit:');
-					const newContent = hasGitComment 
-						? latestVersion.content 
-						: `/* Git commit: ${commitMessage} */\n${latestVersion.content}`;
+					const newContent = `/* Git commit: ${commitMessage} */\n${latestVersion.content}`;
 					fileVersionDB.createVersion(file.id, newContent);
-					
 					for (const version of versions) {
 						fileVersionDB.deleteVersion(version.id);
 					}
@@ -406,32 +393,59 @@ async function appendVersion(version: VersionRecord) {
 }
 
 function setupRepositoryWatcher(repository: any) {
-	repository.state.onDidChange(() => {
+	repository.state.onDidChange(async () => {
 		const head = repository.state.HEAD;
 		const commit = head?.commit;
 		const repoPath = repository.rootUri.fsPath;
 
-		if (repository.state.indexChanges.length > 0) {
+		// Get fresh repository instance from Git extension
+		const gitExtension = vscode.extensions.getExtension('vscode.git');
+		if (!gitExtension) {
+			return;
+		}
+		
+		const git = gitExtension.exports.getAPI(1);
+		const currentRepo = git.repositories.find((repo: any) => 
+			repo.rootUri.fsPath === repoPath
+		);
+
+		// Track staged files
+		if (repository.state.indexChanges?.length > 0) {
 			const stagedFiles = new Set(repository.state.indexChanges.map((change: any) => {
 				const absolutePath = change.uri.fsPath;
 				return path.normalize(vscode.workspace.asRelativePath(absolutePath));
-			}) as string[]);
+			}));
+			
+			// Store staged files for tracking
 			stagedChangesMap.set(repoPath, {
-				files: stagedFiles,
-				message: head?.message || ''
+				files: stagedFiles as Set<string>,
+				message: ''
 			});
 		}
-		
+
+		// Check if a commit just happened (no more staged or working tree changes)
 		if (commit && 
 			repository.state.workingTreeChanges.length === 0 && 
 			repository.state.indexChanges.length === 0) {
 			
 			const lastCommit = lastCommitByRepo.get(repoPath);
 			if (lastCommit !== commit) {
-				const staged = stagedChangesMap.get(repoPath);
-				if (staged && staged.files.size > 0) {
-					lastCommitByRepo.set(repoPath, commit);
-					handleGitCommit(repoPath, repository, staged.files);
+				// New commit detected
+				lastCommitByRepo.set(repoPath, commit);
+				
+				const commitMessage = await getLatestCommitMessage(repoPath);
+				const stagedInfo = stagedChangesMap.get(repoPath);
+				
+				if (stagedInfo && stagedInfo.files.size > 0) {
+					console.log('Processing commit:', {
+						message: commitMessage,
+						files: [...stagedInfo.files],
+						repoPath
+					});
+					
+					// Process the commit
+					await handleGitCommit(repoPath, repository, stagedInfo.files, commitMessage);
+					// Clear the staged files after processing
 					stagedChangesMap.delete(repoPath);
 				}
 			}
