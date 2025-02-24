@@ -164,7 +164,7 @@ export async function exportVersionToFile(version: VersionRecord, filePath: stri
         await fs.promises.mkdir(directory, { recursive: true });
         
         
-        const content = `Version ${version.version_number} - ${new Date(version.timestamp).toLocaleString()}\n\n${version.content}`;
+        const content = `Version from ${filePath}\n\n${version.content}`;
         
         
         await fs.promises.writeFile(fullPath.fsPath, content, 'utf8');
@@ -234,5 +234,32 @@ export async function viewVersion(version: VersionRecord, db: FileVersionDB): Pr
     } catch (error: any) {
         console.error('Error showing version:', error);
         vscode.window.showErrorMessage('Failed to show version: ' + error.message);
+    }
+}
+
+export async function appendVersionToFile(version: VersionRecord, filePath: string): Promise<void> {
+    try {
+        if (!version.content) {
+            throw new Error('Version content is missing or undefined');
+        }
+
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (!workspaceFolder) {
+            throw new Error('No workspace folder found');
+        }
+
+        const fullPath = vscode.Uri.joinPath(workspaceFolder.uri, filePath);
+        const directory = path.dirname(fullPath.fsPath);
+        await fs.promises.mkdir(directory, { recursive: true });
+
+        const newContent = `\n\nVersion from ${filePath}\n\n${version.content}`;
+        
+        // Append to file, create if doesn't exist
+        await fs.promises.appendFile(fullPath.fsPath, newContent, 'utf8');
+        
+        vscode.window.showInformationMessage(`Version appended to ${filePath}`);
+    } catch (error: any) {
+        console.error('Error appending version:', error);
+        throw error;
     }
 } 

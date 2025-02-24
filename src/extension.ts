@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { FileVersionDB } from './db';
 import { initializeDatabase } from './db/schema';
-import { VersionTreeProvider, exportVersionToFile, viewVersion, registerVersionProvider } from './versionTreeProvider';
+import { VersionTreeProvider, exportVersionToFile, viewVersion, registerVersionProvider, appendVersionToFile } from './versionTreeProvider';
 import { VersionRecord } from './db/schema';
 import { VersionTreeItem } from './versionTreeProvider';
 import path from 'path';
@@ -60,6 +60,13 @@ export async function activate(context: vscode.ExtensionContext) {
 			vscode.commands.registerCommand('llmcheckpoint.refreshVersions', () => {
 				console.log('Refreshing versions view...');
 				versionTreeProvider.refresh();
+			}),
+			vscode.commands.registerCommand('llmcheckpoint.appendVersion', (item: VersionTreeItem) => {
+				if (item.version) {
+					appendVersion(item.version);
+				} else {
+					vscode.window.showErrorMessage('No version information found');
+				}
 			})
 		];
 		console.log('Commands registered');
@@ -287,6 +294,26 @@ async function deleteVersion(version: VersionRecord) {
 	} catch (error: any) {
 		const errorMessage = error?.message || 'Unknown error occurred';
 		vscode.window.showErrorMessage('Failed to delete version: ' + errorMessage);
+	}
+}
+
+async function appendVersion(version: VersionRecord) {
+	try {
+		const file = fileVersionDB.getFileById(version.file_id);
+		if (!file) {
+			throw new Error(`File not found for file_id: ${version.file_id}`);
+		}
+		
+		const exportPath = 'history_context.txt';
+		await appendVersionToFile(version, exportPath);
+		vscode.window.showInformationMessage(`Version appended to ${exportPath}`);
+	} catch (error: any) {
+		console.error('Append error details:', {
+			error: error.message,
+			stack: error.stack,
+			version: version
+		});
+		vscode.window.showErrorMessage(`Failed to append version: ${error.message}`);
 	}
 }
 

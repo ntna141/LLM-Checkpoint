@@ -50,6 +50,11 @@
           "command": "llmcheckpoint.exportVersion",
           "when": "view == llmcheckpointVersions && viewItem == version",
           "group": "inline"
+        },
+        {
+          "command": "llmcheckpoint.appendVersion",
+          "when": "view == llmcheckpointVersions && viewItem == version",
+          "group": "inline"
         }
       ],
       "editor/title": [
@@ -89,6 +94,11 @@
         "command": "llmcheckpoint.refreshVersions",
         "title": "Refresh",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "llmcheckpoint.appendVersion",
+        "title": "Append Version",
+        "icon": "$(add)"
       }
     ],
     "keybindings": [
