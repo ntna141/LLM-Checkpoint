@@ -6,15 +6,67 @@ import { VersionRecord } from './db/schema';
 import { VersionTreeItem } from './versionTreeProvider';
 import { SettingsManager } from './settings';
 import path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 let fileVersionDB: FileVersionDB;
 let versionTreeProvider: VersionTreeProvider;
 let settingsManager: SettingsManager;
 
-export async function activate(context: vscode.ExtensionContext) {
+const lastCommitByRepo = new Map<string, string>();
+const stagedChangesMap = new Map<string, Set<string>>();
 
+async function getLatestCommitMessage(workspacePath: string): Promise<string> {
 	try {
+		const { stdout } = await execAsync('git log -1 --pretty=%B', { cwd: workspacePath });
+		return stdout.trim();
+	} catch (error) {
+		console.error('Error getting commit message:', error);
+		return '';
+	}
+}
+
+async function handleGitCommit(workspacePath: string, repository: any, changedFiles: Set<string>) {
+	try {
+		const autoCleanup = await settingsManager.getAutoCleanupAfterCommit();
+		if (!autoCleanup) {
+			return;
+		}
+
+		const commitMessage = await getLatestCommitMessage(workspacePath);
+		if (!commitMessage) {
+			return;
+		}
+
+		const allFiles = fileVersionDB.getAllFiles();
+		for (const file of allFiles) {
+			// Normalize the stored file path for comparison
+			const normalizedFilePath = path.normalize(file.file_path);
+
+			// Only process files that were part of the commit
+			if (changedFiles.has(normalizedFilePath)) {
+				const versions = fileVersionDB.getFileVersions(file.id);
+				if (versions.length > 0) {
+					// Only update the latest version if it exists
+					const latestVersion = versions[0];
+					const newContent = `/* Git commit: ${commitMessage} */\n${latestVersion.content}`;
+					fileVersionDB.createVersion(file.id, newContent);
+					fileVersionDB.deleteVersion(latestVersion.id);
+				}
+			}
+		}
 		
+		versionTreeProvider.refresh();
+		await settingsManager.showConditionalInfoMessage('Cleaned up versions after git commit');
+	} catch (error) {
+		console.error('Error handling git commit:', error);
+	}
+}
+
+export async function activate(context: vscode.ExtensionContext) {
+	try {
 		const db = await initializeDatabase(context);
 		fileVersionDB = new FileVersionDB(db, context);
 		settingsManager = new SettingsManager(context);
@@ -29,8 +81,32 @@ export async function activate(context: vscode.ExtensionContext) {
 		versionTreeProvider.setTreeView(treeView);
 		versionTreeProvider.setupEditorTracking();
 
-		
 		registerVersionProvider(context);
+		
+		// Replace the git watcher setup with Git API
+		const gitExtension = vscode.extensions.getExtension('vscode.git');
+		if (gitExtension) {
+			gitExtension.activate().then(exports => {
+				const git = exports.getAPI(1);
+				// Watch for repository changes
+				git.onDidOpenRepository((repository: any) => {
+					setupRepositoryWatcher(repository);
+				});
+
+				// Set up watchers for existing repositories
+				const repositories = git.repositories;
+				repositories.forEach((repository: any) => {
+					setupRepositoryWatcher(repository);
+				});
+			}).then(undefined, error => {
+				console.error('Failed to activate Git extension:', error);
+				vscode.window.showErrorMessage('Failed to activate Git extension: ' + error);
+			});
+		} else {
+			const message = 'Git extension not found, commit cleanup will not work';
+			vscode.window.showWarningMessage(message);
+		}
+
 		const commands = [
 			vscode.commands.registerCommand('llmcheckpoint.saveVersion', async () => {
 				await saveCurrentVersion();
@@ -104,7 +180,6 @@ export async function activate(context: vscode.ExtensionContext) {
 						}
 					}
 				} else {
-					
 					const versions = fileVersionDB.getFileVersions(file.id, 1);
 					if (versions.length > 0 && versions[0].content === content) {
 						return;
@@ -116,10 +191,10 @@ export async function activate(context: vscode.ExtensionContext) {
 				}, 100);
 			} catch (error) {
 				console.error('Error in save handler:', error);
+				vscode.window.showErrorMessage(`Error saving version: ${error}`);
 			}
 		});
 
-		
 		const fileWatcherDisposable = watcher.onDidChange(async (uri) => {
 			const openTextDocuments = vscode.workspace.textDocuments;
 			if (openTextDocuments.some(doc => doc.uri.toString() === uri.toString())) {
@@ -128,17 +203,20 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		});
 
-		
+		// Register all disposables
 		context.subscriptions.push(
 			...commands,
 			fileWatcherDisposable,
-			onSaveDisposable,  
+			onSaveDisposable,
 			watcher,
 			treeView,
 			versionTreeProvider
 		);
+
 	} catch (error) {
-		vscode.window.showErrorMessage('Failed to activate LLM Checkpoint: ' + error);
+		console.error('Failed to activate LLM Checkpoint:', error);
+		vscode.window.showErrorMessage(`Failed to activate LLM Checkpoint: ${error}`);
+		throw error; // Re-throw to ensure VS Code knows activation failed
 	}
 }
 
@@ -274,4 +352,41 @@ async function appendVersion(version: VersionRecord) {
 		});
 		vscode.window.showErrorMessage(`Failed to append version: ${error.message}`);
 	}
+}
+
+function setupRepositoryWatcher(repository: any) {
+	
+	repository.state.onDidChange(() => {
+		const head = repository.state.HEAD;
+		const commit = head?.commit;
+		const repoPath = repository.rootUri.fsPath;
+
+		if (repository.state.indexChanges.length > 0) {
+			const stagedFiles = new Set(repository.state.indexChanges.map((change: any) => {
+				const absolutePath = change.uri.fsPath;
+				return path.normalize(vscode.workspace.asRelativePath(absolutePath));
+			}) as string[]);
+			stagedChangesMap.set(repoPath, stagedFiles);
+		}
+
+		// Only trigger if:
+		// 1. We have a commit
+		// 2. The commit is different from the last one we processed
+		// 3. There are no pending changes (indicating commit completed)
+		if (commit && 
+			repository.state.workingTreeChanges.length === 0 && 
+			repository.state.indexChanges.length === 0) {
+			
+			const lastCommit = lastCommitByRepo.get(repoPath);
+			if (lastCommit !== commit) {
+				const stagedFiles = stagedChangesMap.get(repoPath);
+				if (stagedFiles && stagedFiles.size > 0) {
+					lastCommitByRepo.set(repoPath, commit);
+					vscode.window.showInformationMessage('New commit detected in: ' + repoPath);
+					handleGitCommit(repoPath, repository, stagedFiles);
+					stagedChangesMap.delete(repoPath); // Clear the staged files after handling
+				}
+			}
+		}
+	});
 }

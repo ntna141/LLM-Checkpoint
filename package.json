@@ -21,20 +21,25 @@
           "type": "boolean",
           "default": true,
           "description": "Show information messages for operations like saving, exporting, and deleting versions"
+        },
+        "llmcheckpoint.autoCleanupAfterCommit": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically cleanup versions after git commit, keeping only the latest version renamed with the commit message"
         }
       }
     },
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "llmcheckpoint",
+          "id": "llm-checkpoint",
           "title": "LLM Checkpoint",
           "icon": "$(history)"
         }
       ]
     },
     "views": {
-      "llmcheckpoint": [
+      "llm-checkpoint": [
         {
           "id": "llmcheckpointVersions",
           "name": "Versions"
