@@ -278,7 +278,6 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
                     treeItem.description = `${date.toLocaleString(undefined, {
                         hour: '2-digit',
                         minute: '2-digit',
-                        hour12: false
                     })} ${date.toLocaleString(undefined, {
                         year: 'numeric',
                         month: 'numeric',
