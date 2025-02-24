@@ -8,6 +8,7 @@ import { SettingsManager } from './settings';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { createPatch } from 'diff';
 
 const execAsync = promisify(exec);
 
@@ -42,18 +43,21 @@ async function handleGitCommit(workspacePath: string, repository: any, changedFi
 
 		const allFiles = fileVersionDB.getAllFiles();
 		for (const file of allFiles) {
-			// Normalize the stored file path for comparison
 			const normalizedFilePath = path.normalize(file.file_path);
 
-			// Only process files that were part of the commit
 			if (changedFiles.has(normalizedFilePath)) {
 				const versions = fileVersionDB.getFileVersions(file.id);
 				if (versions.length > 0) {
-					// Only update the latest version if it exists
 					const latestVersion = versions[0];
-					const newContent = `/* Git commit: ${commitMessage} */\n${latestVersion.content}`;
+					const hasGitComment = latestVersion.content.trimStart().startsWith('/* Git commit:');
+					const newContent = hasGitComment 
+						? latestVersion.content 
+						: `/* Git commit: ${commitMessage} */\n${latestVersion.content}`;
 					fileVersionDB.createVersion(file.id, newContent);
-					fileVersionDB.deleteVersion(latestVersion.id);
+					
+					for (const version of versions) {
+						fileVersionDB.deleteVersion(version.id);
+					}
 				}
 			}
 		}
@@ -83,17 +87,17 @@ export async function activate(context: vscode.ExtensionContext) {
 
 		registerVersionProvider(context);
 		
-		// Replace the git watcher setup with Git API
+		
 		const gitExtension = vscode.extensions.getExtension('vscode.git');
 		if (gitExtension) {
 			gitExtension.activate().then(exports => {
 				const git = exports.getAPI(1);
-				// Watch for repository changes
+				
 				git.onDidOpenRepository((repository: any) => {
 					setupRepositoryWatcher(repository);
 				});
 
-				// Set up watchers for existing repositories
+				
 				const repositories = git.repositories;
 				repositories.forEach((repository: any) => {
 					setupRepositoryWatcher(repository);
@@ -148,7 +152,7 @@ export async function activate(context: vscode.ExtensionContext) {
 					for (const file of files) {
 						const versions = fileVersionDB.getFileVersions(file.id);
 						if (versions.length > 1) {
-							// Keep only the latest version
+							
 							for (let i = 1; i < versions.length; i++) {
 								fileVersionDB.deleteVersion(versions[i].id);
 							}
@@ -192,36 +196,28 @@ export async function activate(context: vscode.ExtensionContext) {
 
 				const saveAllChanges = await settingsManager.getSaveAllChanges();
 
+				const versions = fileVersionDB.getFileVersions(file.id, 1);
+				if (versions.length > 0 && versions[0].content === content) {
+					return; 
+				}
+
 				if (!saveAllChanges) {
 					const versions = fileVersionDB.getFileVersions(file.id, 1);
-					if (versions.length > 0) {
+					if (versions.length === 0) {
+						const lines = content.split('\n');
+						if (lines.length <= 1) {
+							return;
+						}
+					} else {
 						const previousContent = versions[0].content;
-						if (previousContent === content) {
+						const patch = createPatch('file', previousContent, content);
+						const changes = patch.split('\n')
+							.filter(line => line.startsWith('+') || line.startsWith('-'))
+							.filter(line => !line.startsWith('+++') && !line.startsWith('---'));
+							
+						if (changes.length <= 2) {
 							return;
 						}
-
-						const previousLines = previousContent.split('\n');
-						const currentLines = content.split('\n');
-
-						let changedLines = 0;
-						const maxLines = Math.max(previousLines.length, currentLines.length);
-						for (let i = 0; i < maxLines; i++) {
-							if (previousLines[i] !== currentLines[i]) {
-								changedLines++;
-								if (changedLines > 1) {
-									break;
-								}
-							}
-						}
-
-						if (changedLines <= 1) {
-							return;
-						}
-					}
-				} else {
-					const versions = fileVersionDB.getFileVersions(file.id, 1);
-					if (versions.length > 0 && versions[0].content === content) {
-						return;
 					}
 				}
 				fileVersionDB.createVersion(file.id, content);
@@ -242,7 +238,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 		});
 
-		// Register all disposables
+		
 		context.subscriptions.push(
 			...commands,
 			fileWatcherDisposable,
@@ -255,7 +251,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	} catch (error) {
 		console.error('Failed to activate LLM Checkpoint:', error);
 		vscode.window.showErrorMessage(`Failed to activate LLM Checkpoint: ${error}`);
-		throw error; // Re-throw to ensure VS Code knows activation failed
+		throw error; 
 	}
 }
 
@@ -407,11 +403,7 @@ function setupRepositoryWatcher(repository: any) {
 			}) as string[]);
 			stagedChangesMap.set(repoPath, stagedFiles);
 		}
-
-		// Only trigger if:
-		// 1. We have a commit
-		// 2. The commit is different from the last one we processed
-		// 3. There are no pending changes (indicating commit completed)
+		
 		if (commit && 
 			repository.state.workingTreeChanges.length === 0 && 
 			repository.state.indexChanges.length === 0) {
@@ -421,9 +413,8 @@ function setupRepositoryWatcher(repository: any) {
 				const stagedFiles = stagedChangesMap.get(repoPath);
 				if (stagedFiles && stagedFiles.size > 0) {
 					lastCommitByRepo.set(repoPath, commit);
-					vscode.window.showInformationMessage('New commit detected in: ' + repoPath);
 					handleGitCommit(repoPath, repository, stagedFiles);
-					stagedChangesMap.delete(repoPath); // Clear the staged files after handling
+					stagedChangesMap.delete(repoPath); 
 				}
 			}
 		}

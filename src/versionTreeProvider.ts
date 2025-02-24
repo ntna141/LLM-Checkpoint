@@ -242,7 +242,7 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
             });
         } else if (element.file) {
             const versions = element.versions || this.fileVersionDB.getFileVersions(element.file.id);
-            return versions.slice().reverse().map((version, index) => {
+            return versions.map((version, index) => {
                 const timeAgo = index + 1;
                 const promptText = timeAgo === 1 ? 'prompt' : 'prompts';
                 
