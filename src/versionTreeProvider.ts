@@ -4,6 +4,7 @@ import { FileRecord, VersionRecord } from './db/schema';
 import * as fs from 'fs';
 import * as path from 'path';
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon } from 'vscode';
+import { SettingsManager } from './settings';
 
 
 const VERSION_SCHEME = 'llm-version';
@@ -74,7 +75,7 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
     private isReady: boolean = false;
 
     constructor(private fileVersionDB: FileVersionDB) {
-        console.log('VersionTreeProvider constructed');
+        
     }
 
     setTreeView(treeView: vscode.TreeView<VersionTreeItem>) {
@@ -84,20 +85,16 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
         this.disposables.push(
             treeView.onDidExpandElement(e => {
                 if (e.element.file) {
-                    console.log(`File expanded: ${e.element.file.file_path}`);
                     this.expandedFiles.add(e.element.file.file_path);
                 }
             }),
             treeView.onDidCollapseElement(e => {
                 if (e.element.file) {
-                    console.log(`File collapsed: ${e.element.file.file_path}`);
                     this.expandedFiles.delete(e.element.file.file_path);
                 }
             }),
             treeView.onDidChangeVisibility(async () => {
                 if (treeView.visible) {
-                    console.log('Tree view became visible');
-                    
                     const editor = vscode.window.activeTextEditor;
                     if (editor && !editor.document.uri.path.includes('.git/')) {
                         const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
@@ -106,9 +103,7 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
                 }
             })
         );
-
         
-        console.log('Tree view is now ready');
         this.isReady = true;
         this._onDidChangeTreeData.fire();
     }
@@ -117,7 +112,6 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
         const editor = vscode.window.activeTextEditor;
         if (editor && !editor.document.uri.path.includes('.git/')) {
             const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
-            console.log(`Handling initial editor: ${relativePath}`);
             this.expandFile(relativePath, true);
         }
     }
@@ -131,11 +125,8 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
             vscode.window.onDidChangeActiveTextEditor(editor => {
                 if (editor && !editor.document.uri.path.includes('.git/')) {
                     const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
-                    console.log(`Active editor changed to: ${relativePath}`);
                     if (this.isReady) {
                         this.expandFile(relativePath, true);
-                    } else {
-                        console.log('Tree view not ready yet, skipping expansion');
                     }
                 }
             })
@@ -144,19 +135,16 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
 
     private async expandFile(filePath: string, forceExpand: boolean = false) {
         if (this.isRefreshing || !this.isReady) {
-            console.log(`Skipping expand for ${filePath} - Tree view not ready or refreshing`);
+
             return;
         }
 
-        console.log(`Attempting to expand file: ${filePath}`);
         const file = this.fileVersionDB.getFile(filePath);
         if (!file) {
-            console.log(`No file found in database for path: ${filePath}`);
             return;
         }
 
         const versions = this.fileVersionDB.getFileVersions(file.id);
-        console.log(`Found ${versions.length} versions for file: ${filePath}`);
         
         if (versions.length > 0) {
             const wasExpanded = this.expandedFiles.has(filePath);
@@ -198,8 +186,6 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
 
         try {
             this.isRefreshing = true;
-            console.log('Refreshing tree view...', filePath ? `for file: ${filePath}` : 'full refresh');
-            
             if (filePath) {
                 
                 this.expandFile(filePath, true);
@@ -218,7 +204,6 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
     }
 
     async getChildren(element?: VersionTreeItem): Promise<VersionTreeItem[]> {
-        console.log('Getting children for tree view...', element ? `Parent: ${element.label}` : 'Root level');
         
         if (!element) {
             
@@ -228,15 +213,12 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
                 return versions.length > 0;
             });
             
-            console.log(`Found ${filesWithVersions.length} files with versions (from ${allFiles.length} total)`);
-            
             return filesWithVersions.map(file => {
                 const relativePath = file.file_path;
                 const versions = this.fileVersionDB.getFileVersions(file.id);
                 
                 let shouldExpand = this.expandedFiles.has(relativePath);
                 if (!shouldExpand && this.isReady) {
-                    console.log(`Auto-expanding file with versions: ${relativePath}`);
                     this.expandedFiles.add(relativePath);
                     shouldExpand = true;
                 }
@@ -294,64 +276,103 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
     }
 }
 
-export async function exportVersionToFile(version: VersionRecord, filePath: string): Promise<void> {
+let settingsManager: SettingsManager;
+let fileVersionDB: FileVersionDB;
+
+export function initializeProviders(db: FileVersionDB, manager: SettingsManager) {
+    fileVersionDB = db;
+    settingsManager = manager;
+}
+
+async function getFileForVersion(version: VersionRecord): Promise<FileRecord> {
+    if (!version.content) {
+        throw new Error('Version content is missing or undefined');
+    }
+
+    const file = await fileVersionDB.getFileById(version.file_id);
+    if (!file) {
+        throw new Error('Could not find the file record');
+    }
+
+    return file;
+}
+
+async function ensureExportPath(exportPath: string): Promise<string> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+        throw new Error('No workspace folder found');
+    }
+
+    let finalPath = exportPath;
+    const fullPath = vscode.Uri.joinPath(workspaceFolder.uri, exportPath);
+    
     try {
-        console.log('Exporting version to file:', {
-            versionId: version.id,
-            versionNumber: version.version_number,
-            fileId: version.file_id,
-            contentLength: version.content?.length || 0,
-            targetPath: filePath
-        });
-        
-        if (!version.content) {
-            throw new Error('Version content is missing or undefined');
+        const stats = await vscode.workspace.fs.stat(fullPath);
+        if ((stats.type & vscode.FileType.Directory) === vscode.FileType.Directory) {
+            finalPath = path.join(exportPath, 'history_context.txt');
         }
-
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
-            throw new Error('No workspace folder found');
+    } catch (error) {
+        if (exportPath.endsWith('/') || exportPath.endsWith('\\')) {
+            finalPath = path.join(exportPath, 'history_context.txt');
         }
+    }
 
-        
-        let finalPath = filePath;
-        const fullPath = vscode.Uri.joinPath(workspaceFolder.uri, filePath);
-        
-        try {
-            const stats = await vscode.workspace.fs.stat(fullPath);
-            if ((stats.type & vscode.FileType.Directory) === vscode.FileType.Directory) {
-                
-                finalPath = path.join(filePath, 'history_context.txt');
-            }
-        } catch (error) {
-            
-            if (filePath.endsWith('/') || filePath.endsWith('\\')) {
-                finalPath = path.join(filePath, 'history_context.txt');
-            }
-        }
+    const finalFullPath = vscode.Uri.joinPath(workspaceFolder.uri, finalPath);
+    const directory = path.dirname(finalFullPath.fsPath);
+    await fs.promises.mkdir(directory, { recursive: true });
 
-        
-        const finalFullPath = vscode.Uri.joinPath(workspaceFolder.uri, finalPath);
-        console.log('Full export path:', finalFullPath.fsPath);
-        
-        
-        const directory = path.dirname(finalFullPath.fsPath);
-        await fs.promises.mkdir(directory, { recursive: true });
-        
-        const content = `Version from ${finalPath}\n\n${version.content}`;
-        
-        await fs.promises.writeFile(finalFullPath.fsPath, content, 'utf8');
-        
-        vscode.window.showInformationMessage(`Version exported successfully to ${finalPath}`);
-        console.log('Version exported successfully');
-    } catch (error: any) {
-        console.error('Error details:', {
-            error: error.message,
-            stack: error.stack,
-            version: version,
-            filePath: filePath
-        });
-        throw error;
+    return finalPath;
+}
+
+async function writeVersionToFile(version: VersionRecord, file: FileRecord, finalPath: string): Promise<void> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+        throw new Error('No workspace folder found');
+    }
+
+    const finalFullPath = vscode.Uri.joinPath(workspaceFolder.uri, finalPath);
+    const content = `Version from ${finalPath}\n\n${version.content}`;
+    await fs.promises.writeFile(finalFullPath.fsPath, content, 'utf8');
+}
+
+async function appendVersionToExistingFile(version: VersionRecord, file: FileRecord, finalPath: string): Promise<void> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+        throw new Error('No workspace folder found');
+    }
+
+    const finalFullPath = vscode.Uri.joinPath(workspaceFolder.uri, finalPath);
+    const newContent = `\n\nVersion from ${finalPath}\n\n${version.content}`;
+    await fs.promises.appendFile(finalFullPath.fsPath, newContent, 'utf8');
+}
+
+function handleExportError(error: any) {
+    console.error('Error details:', {
+        error: error.message,
+        stack: error.stack
+    });
+    throw error;
+}
+
+export async function exportVersionToFile(version: VersionRecord, exportPath: string): Promise<void> {
+    try {
+        const file = await getFileForVersion(version);
+        const finalPath = await ensureExportPath(exportPath);
+        await writeVersionToFile(version, file, finalPath);
+        await settingsManager.showConditionalInfoMessage(`Version exported successfully to ${finalPath}`);
+    } catch (error) {
+        handleExportError(error);
+    }
+}
+
+export async function appendVersionToFile(version: VersionRecord, exportPath: string): Promise<void> {
+    try {
+        const file = await getFileForVersion(version);
+        const finalPath = await ensureExportPath(exportPath);
+        await appendVersionToExistingFile(version, file, finalPath);
+        await settingsManager.showConditionalInfoMessage(`Version appended to ${finalPath}`);
+    } catch (error) {
+        handleExportError(error);
     }
 }
 
@@ -406,52 +427,5 @@ export async function viewVersion(version: VersionRecord, db: FileVersionDB): Pr
     } catch (error: any) {
         console.error('Error showing version:', error);
         vscode.window.showErrorMessage('Failed to show version: ' + error.message);
-    }
-}
-
-export async function appendVersionToFile(version: VersionRecord, filePath: string): Promise<void> {
-    try {
-        if (!version.content) {
-            throw new Error('Version content is missing or undefined');
-        }
-
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
-            throw new Error('No workspace folder found');
-        }
-
-        
-        let finalPath = filePath;
-        const fullPath = vscode.Uri.joinPath(workspaceFolder.uri, filePath);
-        
-        try {
-            const stats = await vscode.workspace.fs.stat(fullPath);
-            if ((stats.type & vscode.FileType.Directory) === vscode.FileType.Directory) {
-                
-                finalPath = path.join(filePath, 'history_context.txt');
-            }
-        } catch (error) {
-            
-            if (filePath.endsWith('/') || filePath.endsWith('\\')) {
-                finalPath = path.join(filePath, 'history_context.txt');
-            }
-        }
-
-        
-        const finalFullPath = vscode.Uri.joinPath(workspaceFolder.uri, finalPath);
-        
-        
-        const directory = path.dirname(finalFullPath.fsPath);
-        await fs.promises.mkdir(directory, { recursive: true });
-
-        const newContent = `\n\nVersion from ${finalPath}\n\n${version.content}`;
-        
-        
-        await fs.promises.appendFile(finalFullPath.fsPath, newContent, 'utf8');
-        
-        vscode.window.showInformationMessage(`Version appended to ${finalPath}`);
-    } catch (error: any) {
-        console.error('Error appending version:', error);
-        throw error;
     }
 } 

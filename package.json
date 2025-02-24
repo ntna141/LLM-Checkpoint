@@ -6,7 +6,6 @@
   "engines": {
     "vscode": "^1.95.0"
   },
-  "icon": "resources/icon.svg",
   "categories": [
     "Other"
   ],
@@ -15,6 +14,16 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "LLM Checkpoint",
+      "properties": {
+        "llmcheckpoint.showInfoMessages": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show information messages for operations like saving, exporting, and deleting versions"
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -76,13 +85,8 @@
         "icon": "$(eye)"
       },
       {
-        "command": "llmcheckpoint.restoreVersion",
-        "title": "Restore Version",
-        "icon": "$(history)"
-      },
-      {
         "command": "llmcheckpoint.exportVersion",
-        "title": "Export Version",
+        "title": "Reset Context",
         "icon": "$(export)"
       },
       {

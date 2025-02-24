@@ -4,6 +4,7 @@ import * as path from 'path';
 export class SettingsManager {
     private static readonly HISTORY_PATH_KEY = 'historyContextPath';
     private static readonly SAVE_ALL_CHANGES_KEY = 'saveAllChanges';
+    private static readonly SHOW_INFO_MESSAGES_KEY = 'showInfoMessages';
     private panel: vscode.WebviewPanel | undefined;
 
     constructor(private context: vscode.ExtensionContext) {}
@@ -16,14 +17,24 @@ export class SettingsManager {
     async getSaveAllChanges(): Promise<boolean> {
         const workspaceState = this.context.workspaceState;
         const value = workspaceState.get<boolean>(SettingsManager.SAVE_ALL_CHANGES_KEY, true);
-        console.log('Getting saveAllChanges setting:', value);
+        return value;
+    }
+
+    async getShowInfoMessages(): Promise<boolean> {
+        const workspaceState = this.context.workspaceState;
+        const value = workspaceState.get<boolean>(SettingsManager.SHOW_INFO_MESSAGES_KEY, true);
         return value;
     }
 
     async setSaveAllChanges(value: boolean): Promise<void> {
-        console.log('Setting saveAllChanges to:', value);
         await this.context.workspaceState.update(SettingsManager.SAVE_ALL_CHANGES_KEY, value);
-        // Update the webview if it's open
+        if (this.panel) {
+            this.panel.webview.html = await this.getWebviewContent();
+        }
+    }
+
+    async setShowInfoMessages(value: boolean): Promise<void> {
+        await this.context.workspaceState.update(SettingsManager.SHOW_INFO_MESSAGES_KEY, value);
         if (this.panel) {
             this.panel.webview.html = await this.getWebviewContent();
         }
@@ -31,15 +42,22 @@ export class SettingsManager {
 
     async setHistoryPath(filePath: string): Promise<void> {
         await this.context.workspaceState.update(SettingsManager.HISTORY_PATH_KEY, filePath);
-        // Update the webview if it's open
         if (this.panel) {
             this.panel.webview.html = await this.getWebviewContent();
+        }
+    }
+
+    async showConditionalInfoMessage(message: string): Promise<void> {
+        const showInfoMessages = await this.getShowInfoMessages();
+        if (showInfoMessages) {
+            vscode.window.showInformationMessage(message);
         }
     }
 
     private async getWebviewContent(): Promise<string> {
         const currentPath = await this.getHistoryPath();
         const saveAllChanges = await this.getSaveAllChanges();
+        const showInfoMessages = await this.getShowInfoMessages();
         return `<!DOCTYPE html>
         <html>
         <head>
@@ -137,6 +155,10 @@ export class SettingsManager {
                     <input type="checkbox" id="saveAllChanges" ${saveAllChanges ? 'checked' : ''}>
                     <label for="saveAllChanges" class="checkbox-label">Save all changes (uncheck to save only multiline changes)</label>
                 </div>
+                <div class="checkbox-container">
+                    <input type="checkbox" id="showInfoMessages" ${showInfoMessages ? 'checked' : ''}>
+                    <label for="showInfoMessages" class="checkbox-label">Show information messages</label>
+                </div>
             </div>
             <script>
                 const vscode = acquireVsCodeApi();
@@ -156,6 +178,13 @@ export class SettingsManager {
                 document.getElementById('saveAllChanges').addEventListener('change', (event) => {
                     vscode.postMessage({
                         command: 'updateSaveAllChanges',
+                        value: event.target.checked
+                    });
+                });
+
+                document.getElementById('showInfoMessages').addEventListener('change', (event) => {
+                    vscode.postMessage({
+                        command: 'updateShowInfoMessages',
                         value: event.target.checked
                     });
                 });
@@ -204,6 +233,9 @@ export class SettingsManager {
                         break;
                     case 'updateSaveAllChanges':
                         await this.setSaveAllChanges(message.value);
+                        break;
+                    case 'updateShowInfoMessages':
+                        await this.setShowInfoMessages(message.value);
                         break;
                 }
             },
@@ -272,26 +304,26 @@ export class SettingsManager {
                 throw new Error('No workspace folder found');
             }
 
-            // If path is empty or just whitespace, use default in root
+            
             if (!inputPath.trim()) {
                 await this.setHistoryPath('history_context.txt');
                 return;
             }
 
-            // Clean up the path and ensure it's relative
+            
             let cleanPath = inputPath.trim();
             if (path.isAbsolute(cleanPath)) {
                 cleanPath = path.relative(workspaceFolder.uri.fsPath, cleanPath);
             }
 
-            // Create URI for the path
+            
             const fullUri = vscode.Uri.joinPath(workspaceFolder.uri, cleanPath);
             
             try {
-                // Check if the path exists and is a directory
+                
                 const stats = await vscode.workspace.fs.stat(fullUri);
                 if ((stats.type & vscode.FileType.Directory) === vscode.FileType.Directory) {
-                    // If it's a directory, append the default filename
+                    
                     cleanPath = path.join(cleanPath, 'history_context.txt');
                     this.panel?.webview.postMessage({ 
                         type: 'error',
@@ -299,12 +331,12 @@ export class SettingsManager {
                     });
                 }
             } catch (error) {
-                // Path doesn't exist, check if parent directory exists
+                
                 const parentDir = path.dirname(fullUri.fsPath);
                 try {
                     await vscode.workspace.fs.stat(vscode.Uri.file(parentDir));
                 } catch (error) {
-                    // If parent directory doesn't exist, default to workspace root
+                    
                     cleanPath = path.join('', path.basename(cleanPath));
                     if (cleanPath.endsWith('/') || cleanPath.endsWith('\\')) {
                         cleanPath = path.join(cleanPath, 'history_context.txt');
@@ -316,7 +348,7 @@ export class SettingsManager {
                 }
             }
 
-            // Ensure the path has a filename
+            
             if (cleanPath.endsWith('/') || cleanPath.endsWith('\\') || !path.extname(cleanPath)) {
                 cleanPath = path.join(cleanPath, 'history_context.txt');
             }
@@ -328,7 +360,7 @@ export class SettingsManager {
                 type: 'error',
                 message: 'Invalid path. Please enter a valid relative path.'
             });
-            // Default to workspace root with original filename
+            
             const defaultPath = path.join('', path.basename(inputPath) || 'history_context.txt');
             await this.setHistoryPath(defaultPath);
         }

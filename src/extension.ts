@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { FileVersionDB } from './db';
 import { initializeDatabase } from './db/schema';
-import { VersionTreeProvider, exportVersionToFile, viewVersion, registerVersionProvider, appendVersionToFile } from './versionTreeProvider';
+import { VersionTreeProvider, exportVersionToFile, viewVersion, registerVersionProvider, appendVersionToFile, initializeProviders } from './versionTreeProvider';
 import { VersionRecord } from './db/schema';
 import { VersionTreeItem } from './versionTreeProvider';
 import { SettingsManager } from './settings';
@@ -19,6 +19,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		fileVersionDB = new FileVersionDB(db, context);
 		settingsManager = new SettingsManager(context);
 		
+		initializeProviders(fileVersionDB, settingsManager);
+		
 		versionTreeProvider = new VersionTreeProvider(fileVersionDB);
 		const treeView = vscode.window.createTreeView('llmcheckpointVersions', {
 			treeDataProvider: versionTreeProvider,
@@ -34,7 +36,6 @@ export async function activate(context: vscode.ExtensionContext) {
 				await saveCurrentVersion();
 			}),
 			vscode.commands.registerCommand('llmcheckpoint.showVersionHistory', showVersionHistory),
-			vscode.commands.registerCommand('llmcheckpoint.restoreVersion', restoreVersion),
 			vscode.commands.registerCommand('llmcheckpoint.viewVersion', (version) => {
 				return viewVersion(version, fileVersionDB);
 			}),
@@ -74,57 +75,41 @@ export async function activate(context: vscode.ExtensionContext) {
 					file = fileVersionDB.createFile(relativePath);
 				}
 
-				// Get the current setting for saving all changes
 				const saveAllChanges = await settingsManager.getSaveAllChanges();
-				console.log('Current saveAllChanges setting:', saveAllChanges);
 
-				// If not saving all changes, check if the changes are multiline
 				if (!saveAllChanges) {
-					console.log('Checking for multiline changes...');
 					const versions = fileVersionDB.getFileVersions(file.id, 1);
 					if (versions.length > 0) {
 						const previousContent = versions[0].content;
 						if (previousContent === content) {
-							console.log('Content unchanged, skipping save');
 							return;
 						}
 
 						const previousLines = previousContent.split('\n');
 						const currentLines = content.split('\n');
 
-						console.log('Previous version line count:', previousLines.length);
-						console.log('Current version line count:', currentLines.length);
-
-						// Count the number of lines that are different
 						let changedLines = 0;
 						const maxLines = Math.max(previousLines.length, currentLines.length);
 						for (let i = 0; i < maxLines; i++) {
 							if (previousLines[i] !== currentLines[i]) {
 								changedLines++;
-								console.log(`Line ${i + 1} changed`);
 								if (changedLines > 1) {
-									console.log('Multiple lines changed, will save version');
 									break;
 								}
 							}
 						}
 
 						if (changedLines <= 1) {
-							console.log('Only single line change detected, skipping save');
-							vscode.window.showInformationMessage('Single line change detected - version not saved');
 							return;
 						}
 					}
 				} else {
-					// Check if content is unchanged
+					
 					const versions = fileVersionDB.getFileVersions(file.id, 1);
 					if (versions.length > 0 && versions[0].content === content) {
-						console.log('Content unchanged, skipping save');
 						return;
 					}
 				}
-
-				// Create the version and refresh the tree
 				fileVersionDB.createVersion(file.id, content);
 				setTimeout(() => {
 					versionTreeProvider.refresh(relativePath);
@@ -152,11 +137,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			treeView,
 			versionTreeProvider
 		);
-
-		console.log('LLMCheckpoint extension activated successfully!');
-		vscode.window.showInformationMessage('LLM Checkpoint is now active');
 	} catch (error) {
-		console.error('Error activating LLMCheckpoint:', error);
 		vscode.window.showErrorMessage('Failed to activate LLM Checkpoint: ' + error);
 	}
 }
@@ -179,7 +160,6 @@ async function saveCurrentVersion() {
 
 		const document = editor.document;
 		if (!document.isDirty) {
-			vscode.window.showInformationMessage('No changes to save');
 			return;
 		}
 
@@ -193,7 +173,6 @@ async function saveCurrentVersion() {
 
 		const version = fileVersionDB.createVersion(file.id, content);
 		versionTreeProvider.refresh(relativePath);
-		vscode.window.showInformationMessage(`Version ${version.version_number} saved`);
 
 	} catch (error) {
 		console.error('Error saving version:', error);
@@ -238,7 +217,6 @@ async function showVersionHistory() {
 		const doc = await vscode.workspace.openTextDocument(uri);
 		const editor = await vscode.window.showTextDocument(doc);
 		
-		
 		const originalContent = selected.version.content;
 		const tempUri = uri.with({ scheme: 'untitled', path: `${relativePath}-v${selected.version.version_number}` });
 		const tempDoc = await vscode.workspace.openTextDocument(tempUri);
@@ -253,63 +231,17 @@ async function showVersionHistory() {
 	}
 }
 
-async function restoreVersion() {
-	const editor = vscode.window.activeTextEditor;
-	if (!editor) {
-		vscode.window.showWarningMessage('No active editor');
-		return;
-	}
-
-	const document = editor.document;
-	const relativePath = vscode.workspace.asRelativePath(document.uri);
-	const file = fileVersionDB.getFile(relativePath);
-	
-	if (!file) {
-		vscode.window.showWarningMessage('No version history found for this file');
-		return;
-	}
-
-	const versions = fileVersionDB.getFileVersions(file.id);
-	const items = versions.map(v => ({
-		label: `Version ${v.version_number}`,
-		description: new Date(v.timestamp).toLocaleString(),
-		version: v
-	}));
-
-	const selected = await vscode.window.showQuickPick(items, {
-		placeHolder: 'Select a version to restore'
-	});
-
-	if (selected) {
-		const edit = new vscode.WorkspaceEdit();
-		const uri = document.uri;
-		const fullRange = new vscode.Range(
-			document.positionAt(0),
-			document.positionAt(document.getText().length)
-		);
-		edit.replace(uri, fullRange, selected.version.content);
-		await vscode.workspace.applyEdit(edit);
-		vscode.window.showInformationMessage(`Restored to version ${selected.version.version_number}`);
-	}
-}
-
 async function exportVersion(version: VersionRecord) {
 	try {
-		const file = fileVersionDB.getFileById(version.file_id);
-		if (!file) {
-			throw new Error(`File not found for file_id: ${version.file_id}`);
-		}
-		
 		const exportPath = await settingsManager.getHistoryPath();
 		await exportVersionToFile(version, exportPath);
-		vscode.window.showInformationMessage(`Version exported to ${exportPath}`);
 	} catch (error: any) {
-		console.error('Export error details:', {
+		console.error('Set context error details:', {
 			error: error.message,
 			stack: error.stack,
 			version: version
 		});
-		vscode.window.showErrorMessage(`Failed to export version: ${error.message}`);
+		vscode.window.showErrorMessage(`Failed to set new context: ${error.message}`);
 	}
 }
 
@@ -318,7 +250,7 @@ async function deleteVersion(version: VersionRecord) {
 		const edit = new vscode.WorkspaceEdit();
 		fileVersionDB.deleteVersion(version.id);
 		versionTreeProvider.refresh();
-		vscode.window.showInformationMessage(`Version ${version.version_number} deleted`);
+		await settingsManager.showConditionalInfoMessage('Version deleted successfully');
 	} catch (error: any) {
 		const errorMessage = error?.message || 'Unknown error occurred';
 		vscode.window.showErrorMessage('Failed to delete version: ' + errorMessage);
@@ -334,7 +266,6 @@ async function appendVersion(version: VersionRecord) {
 		
 		const exportPath = await settingsManager.getHistoryPath();
 		await appendVersionToFile(version, exportPath);
-		vscode.window.showInformationMessage(`Version appended to ${exportPath}`);
 	} catch (error: any) {
 		console.error('Append error details:', {
 			error: error.message,
@@ -343,8 +274,4 @@ async function appendVersion(version: VersionRecord) {
 		});
 		vscode.window.showErrorMessage(`Failed to append version: ${error.message}`);
 	}
-}
-
-export function deactivate() {
-	
 }
