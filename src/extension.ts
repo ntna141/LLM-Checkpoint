@@ -32,29 +32,17 @@ async function handleGitCommit(workspacePath: string, repository: any, changedFi
 	try {
 		const head = repository.state.HEAD;
 		const commitHash = head?.commit;
-
 		
-		if (!commitHash) {
-			return;
-		}
-
-		
-		if (!commitMessage) {
-			commitMessage = await getLatestCommitMessage(workspacePath);
-		}
-		
-		if (!commitMessage || commitMessage.trim() === '') {
+		if (!commitHash || !commitMessage || commitMessage.trim() === '') {
 			return;
 		}
 
 		const autoCleanup = await settingsManager.getAutoCleanupAfterCommit();
-		
 		const allFiles = fileVersionDB.getAllFiles();
 		let processedCount = 0;
 		
 		for (const file of allFiles) {
 			const normalizedFilePath = path.normalize(file.file_path);
-			
 			
 			if (!changedFiles.has(normalizedFilePath)) {
 				continue;
@@ -66,22 +54,22 @@ async function handleGitCommit(workspacePath: string, repository: any, changedFi
 			}
 			
 			const latestVersion = versions[0];
-			
-			
 			const newContent = `/* Git commit: ${commitMessage} */\n${latestVersion.content.replace(/\/\* Git commit:.*\*\/\n/g, '')}`;
 			fileVersionDB.createVersion(file.id, newContent);
 			processedCount++;
-			
 			
 			if (autoCleanup) {
 				for (const version of versions) {
 					fileVersionDB.deleteVersion(version.id);
 				}
 			}
+
+			
+			versionTreeProvider.refresh(normalizedFilePath);
 		}
 		
-		
 		if (processedCount > 0) {
+			
 			versionTreeProvider.refresh();
 			
 			const message = autoCleanup 
