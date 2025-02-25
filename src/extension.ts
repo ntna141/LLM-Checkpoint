@@ -16,7 +16,6 @@ let fileVersionDB: FileVersionDB;
 let versionTreeProvider: VersionTreeProvider;
 let settingsManager: SettingsManager;
 
-const stagedChangesMap = new Map<string, { files: Set<string>, message: string }>();
 
 async function getLatestCommitMessage(workspacePath: string): Promise<string> {
 	try {

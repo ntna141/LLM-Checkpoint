@@ -113,14 +113,6 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
         this._onDidChangeTreeData.fire();
     }
 
-    private handleInitialEditor() {
-        const editor = vscode.window.activeTextEditor;
-        if (editor && !editor.document.uri.path.includes('.git/')) {
-            const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
-            this.expandFile(relativePath, true);
-        }
-    }
-
     
     setupEditorTracking() {
         this.disposables.push(
@@ -254,6 +246,7 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
             const showTimestamps = await this.settingsManager.getShowTimestamps();
             
             return versions.map((version, index) => {
+                console.log(version);
                 // Use the stored label if it exists, otherwise fall back to "X prompts ago"
                 const label = version.label || `${index + 1} ${index === 0 ? 'prompt' : 'prompts'} ago`;
 

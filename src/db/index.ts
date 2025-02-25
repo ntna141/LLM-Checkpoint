@@ -10,7 +10,7 @@ export class FileVersionDB {
 
     constructor(db: Database, context: vscode.ExtensionContext) {
         this.db = db;
-        this.dbPath = path.join(context.globalStoragePath, 'file_versions.db');
+        this.dbPath = path.join(context.storageUri?.fsPath || context.globalStoragePath, 'file_versions.db');
     }
 
     private saveToFile() {
@@ -18,16 +18,31 @@ export class FileVersionDB {
         fs.writeFileSync(this.dbPath, Buffer.from(data));
     }
 
+    private mapFileRecord(row: any[]): FileRecord {
+        return {
+            id: row[0] as number,
+            file_path: row[1] as string,
+            current_version_id: row[2] as number | null
+        };
+    }
+
+    private mapVersionRecord(row: any[]): VersionRecord {
+        return {
+            id: row[0] as number,
+            file_id: row[1] as number,
+            content: row[2] as string,
+            timestamp: row[3] as string,
+            version_number: row[4] as number,
+            label: row[5] as string
+        };
+    }
+
     createFile(filePath: string): FileRecord {
         const stmt = this.db.prepare('INSERT INTO files (file_path) VALUES (?)');
         stmt.run([filePath]);
         const result = this.db.exec('SELECT * FROM files WHERE id = last_insert_rowid()')[0];
         this.saveToFile();
-        return {
-            id: result.values[0][0] as number,
-            file_path: result.values[0][1] as string,
-            current_version_id: result.values[0][2] as number | null
-        };
+        return this.mapFileRecord(result.values[0]);
     }
 
     getFile(filePath: string): FileRecord | undefined {
@@ -35,11 +50,7 @@ export class FileVersionDB {
         if (result.length === 0 || result[0].values.length === 0) {
             return undefined;
         }
-        return {
-            id: result[0].values[0][0] as number,
-            file_path: result[0].values[0][1] as string,
-            current_version_id: result[0].values[0][2] as number | null
-        };
+        return this.mapFileRecord(result[0].values[0]);
     }
 
     getFileById(fileId: number): FileRecord | undefined {
@@ -47,11 +58,7 @@ export class FileVersionDB {
         if (result.length === 0 || result[0].values.length === 0) {
             return undefined;
         }
-        return {
-            id: result[0].values[0][0] as number,
-            file_path: result[0].values[0][1] as string,
-            current_version_id: result[0].values[0][2] as number | null
-        };
+        return this.mapFileRecord(result[0].values[0]);
     }
 
     createVersion(fileId: number, content: string): VersionRecord {
@@ -83,32 +90,21 @@ export class FileVersionDB {
 
         this.saveToFile();
 
-        return {
-            id: versionResult.values[0][0] as number,
-            file_id: versionResult.values[0][1] as number,
-            content: versionResult.values[0][2] as string,
-            timestamp: versionResult.values[0][3] as string,
-            version_number: versionResult.values[0][4] as number
-        };
+        return this.mapVersionRecord(versionResult.values[0]);
     }
 
     getVersion(versionId: number): VersionRecord | undefined {
-        const result = this.db.exec('SELECT * FROM versions WHERE id = ?', [versionId]);
-        if (result.length === 0 || result[0].values.length === 0) {
+        const result = this.db.exec('SELECT id, file_id, content, timestamp, version_number, label FROM versions WHERE id = ?', [versionId]);
+        if (!result?.[0]?.values?.[0]?.[0]) {
             return undefined;
         }
-        return {
-            id: result[0].values[0][0] as number,
-            file_id: result[0].values[0][1] as number,
-            content: result[0].values[0][2] as string,
-            timestamp: result[0].values[0][3] as string,
-            version_number: result[0].values[0][4] as number
-        };
+        return this.mapVersionRecord(result[0].values[0]);
     }
 
     getFileVersions(fileId: number, limit: number = 10): VersionRecord[] {
         const result = this.db.exec(`
-            SELECT * FROM versions 
+            SELECT id, file_id, content, timestamp, version_number, label 
+            FROM versions 
             WHERE file_id = ? 
             ORDER BY version_number DESC 
             LIMIT ?
@@ -118,18 +114,13 @@ export class FileVersionDB {
             return [];
         }
 
-        return result[0].values.map(row => ({
-            id: row[0] as number,
-            file_id: row[1] as number,
-            content: row[2] as string,
-            timestamp: row[3] as string,
-            version_number: row[4] as number
-        }));
+        return result[0].values.map(row => this.mapVersionRecord(row));
     }
 
     getCurrentVersion(fileId: number): VersionRecord | undefined {
         const result = this.db.exec(`
-            SELECT v.* FROM versions v
+            SELECT v.id, v.file_id, v.content, v.timestamp, v.version_number, v.label 
+            FROM versions v
             JOIN files f ON f.current_version_id = v.id
             WHERE f.id = ?
         `, [fileId]);
@@ -138,13 +129,7 @@ export class FileVersionDB {
             return undefined;
         }
 
-        return {
-            id: result[0].values[0][0] as number,
-            file_id: result[0].values[0][1] as number,
-            content: result[0].values[0][2] as string,
-            timestamp: result[0].values[0][3] as string,
-            version_number: result[0].values[0][4] as number
-        };
+        return this.mapVersionRecord(result[0].values[0]);
     }
 
     deleteVersion(versionId: number): void {
@@ -159,11 +144,7 @@ export class FileVersionDB {
             return [];
         }
 
-        return result[0].values.map(row => ({
-            id: row[0] as number,
-            file_path: row[1] as string,
-            current_version_id: row[2] as number | null
-        }));
+        return result[0].values.map(row => this.mapFileRecord(row));
     }
 
     public async getLastCommitForRepo(repoPath: string): Promise<string | null> {
@@ -202,7 +183,9 @@ export class FileVersionDB {
             SET content = ?, label = ?
             WHERE id = ?
         `);
-        stmt.run([newContent, newLabel, versionId]);
+        stmt.bind([newContent, newLabel, versionId]);
+        stmt.step();
+        stmt.free();
         this.saveToFile();
     }
 
