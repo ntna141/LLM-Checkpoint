@@ -1,5 +1,6 @@
 {
   "name": "llmcheckpoint",
+  "icon": "logo.png",
   "displayName": "LLM Checkpoint",
   "description": "Provide checkpoint context to LLM coding assistants",
   "version": "0.0.4",

@@ -14,4 +14,5 @@ vsc-extension-quickstart.md
 **/.vscode-test.*
 !resources/icon.svg
 !dist/**/*
-!history_context.txt
+history_context.txt
+images/**
