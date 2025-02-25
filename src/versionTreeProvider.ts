@@ -254,9 +254,8 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
             const showTimestamps = await this.settingsManager.getShowTimestamps();
             
             return versions.map((version, index) => {
-                const timeAgo = index + 1;
-                const promptText = timeAgo === 1 ? 'prompt' : 'prompts';
-                const label = `${timeAgo} ${promptText} ago`;
+                // Use the stored label if it exists, otherwise fall back to "X prompts ago"
+                const label = version.label || `${index + 1} ${index === 0 ? 'prompt' : 'prompts'} ago`;
 
                 const treeItem = new VersionTreeItem(
                     label,

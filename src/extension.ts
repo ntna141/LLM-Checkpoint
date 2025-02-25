@@ -55,7 +55,9 @@ async function handleGitCommit(workspacePath: string, repository: any, changedFi
 			
 			const latestVersion = versions[0];
 			const newContent = `/* Git commit: ${commitMessage} */\n${latestVersion.content.replace(/\/\* Git commit:.*\*\/\n/g, '')}`;
-			fileVersionDB.createVersion(file.id, newContent);
+
+			fileVersionDB.updateVersion(latestVersion.id, newContent, commitMessage);
+			versionTreeProvider.refresh(normalizedFilePath);
 			processedCount++;
 			
 			if (autoCleanup) {

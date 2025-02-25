@@ -15,6 +15,7 @@ export interface VersionRecord {
     content: string;
     timestamp: string;
     version_number: number;
+    label?: string;
 }
 
 export async function initializeDatabase(context: vscode.ExtensionContext): Promise<Database> {
@@ -56,6 +57,7 @@ export async function initializeDatabase(context: vscode.ExtensionContext): Prom
             content TEXT NOT NULL,
             timestamp TEXT NOT NULL DEFAULT (datetime('now')),
             version_number INTEGER NOT NULL,
+            label TEXT,
             FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE,
             UNIQUE(file_id, version_number)
         )

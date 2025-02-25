@@ -195,4 +195,15 @@ export class FileVersionDB {
             console.error('Error saving last commit for repo:', error);
         }
     }
+
+    updateVersion(versionId: number, newContent: string, newLabel: string): void {
+        const stmt = this.db.prepare(`
+            UPDATE versions 
+            SET content = ?, label = ?
+            WHERE id = ?
+        `);
+        stmt.run([newContent, newLabel, versionId]);
+        this.saveToFile();
+    }
+
 } 
