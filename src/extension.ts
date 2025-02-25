@@ -61,7 +61,7 @@ async function handleGitCommit(workspacePath: string, repository: any, changedFi
 			processedCount++;
 			
 			if (autoCleanup) {
-				for (const version of versions) {
+				for (const version of versions.slice(1)) {
 					fileVersionDB.deleteVersion(version.id);
 				}
 			}

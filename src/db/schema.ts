@@ -62,6 +62,12 @@ export async function initializeDatabase(context: vscode.ExtensionContext): Prom
             UNIQUE(file_id, version_number)
         )
     `);
+//migration
+    try {
+        db.run(`ALTER TABLE versions ADD COLUMN label TEXT`);
+    } catch (error) {
+        console.log('Probably already exists');
+    }
 
     db.run(`
         CREATE TABLE IF NOT EXISTS repository_commits (
