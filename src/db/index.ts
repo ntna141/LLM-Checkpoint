@@ -13,9 +13,15 @@ export class FileVersionDB {
         this.dbPath = path.join(context.globalStorageUri.fsPath, 'file_versions.db');
     }
 
-    private saveToFile() {
+    private async ensureDirectory() {
+        const dir = path.dirname(this.dbPath);
+        await fs.promises.mkdir(dir, { recursive: true });
+    }
+
+    private async saveToFile() {
+        await this.ensureDirectory();
         const data = this.db.export();
-        fs.writeFileSync(this.dbPath, Buffer.from(data));
+        await fs.promises.writeFile(this.dbPath, Buffer.from(data));
     }
 
     private mapFileRecord(row: any[]): FileRecord {
@@ -177,7 +183,7 @@ export class FileVersionDB {
         }
     }
 
-    updateVersion(versionId: number, newContent: string, newLabel: string): void {
+    async updateVersion(versionId: number, newContent: string, newLabel: string): Promise<void> {
         const stmt = this.db.prepare(`
             UPDATE versions 
             SET content = ?, label = ?
@@ -186,7 +192,7 @@ export class FileVersionDB {
         stmt.bind([newContent, newLabel, versionId]);
         stmt.step();
         stmt.free();
-        this.saveToFile();
+        await this.saveToFile();
     }
 
 } 
