@@ -36,6 +36,14 @@ async function handleGitCommit(workspacePath: string, repository: any, changedFi
 			return;
 		}
 
+		// Add a debounce check using a timestamp
+		const now = Date.now();
+		const lastProcessed = (repository as any)._lastProcessedCommit || 0;
+		if (now - lastProcessed < 1000) { // Prevent processing within 1 second
+			return;
+		}
+		(repository as any)._lastProcessedCommit = now;
+
 		const autoCleanup = await settingsManager.getAutoCleanupAfterCommit();
 		const allFiles = fileVersionDB.getAllFiles();
 		let processedCount = 0;
@@ -404,17 +412,28 @@ async function appendVersion(version: VersionRecord) {
 }
 
 function setupRepositoryWatcher(repository: any, context: vscode.ExtensionContext) {
-	
 	let lastKnownCommit = repository.state.HEAD?.commit || '';
-	
+	let isProcessing = false; // Add processing flag
 	
 	const pollInterval = setInterval(async () => {
+		if (isProcessing) {
+			return;
+		}
+
 		try {
+			isProcessing = true;
 			const currentCommit = repository.state.HEAD?.commit || '';
 			const repoPath = repository.rootUri.fsPath;
 			
-			
 			if (!currentCommit || currentCommit === lastKnownCommit) {
+				isProcessing = false;
+				return;
+			}
+
+			const lastSavedCommit = await fileVersionDB.getLastCommitForRepo(repoPath);
+			if (lastSavedCommit === currentCommit) {
+				lastKnownCommit = currentCommit;
+				isProcessing = false;
 				return;
 			}
 			
@@ -422,7 +441,6 @@ function setupRepositoryWatcher(repository: any, context: vscode.ExtensionContex
 				`git log --name-only --pretty=format: ${lastKnownCommit}..${currentCommit}`,
 				{ cwd: repoPath }
 			);
-			
 			
 			const changedFiles = new Set<string>(
 				stdout.split('\n')
@@ -434,29 +452,23 @@ function setupRepositoryWatcher(repository: any, context: vscode.ExtensionContex
 			);
 			
 			if (changedFiles.size > 0) {
-				
 				const commitMessage = await getLatestCommitMessage(repoPath);
-				
-				
 				await handleGitCommit(repoPath, repository, changedFiles, commitMessage);
-				
-				
 				await fileVersionDB.saveLastCommitForRepo(repoPath, currentCommit);
 			}
-			
 			
 			lastKnownCommit = currentCommit;
 			
 		} catch (error) {
 			console.error('Error in repository polling:', error);
+		} finally {
+			isProcessing = false;
 		}
 	}, 2000);
-	
 	
 	context.subscriptions.push({ 
 		dispose: () => clearInterval(pollInterval) 
 	});
-	
 	
 	repository.status();
 }
