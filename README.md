@@ -2,6 +2,7 @@
 
 Quick Checkpoint is a VS Code extension that helps you use code history as context when working with AI coding assistants. It is useful for quick checkpoint as context to help undo when LLMs break your code.
 
+Try it here: [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=ngwx-dev.llmcheckpoint)
 ## Features
 
 <p align="center">
