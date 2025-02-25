@@ -256,15 +256,7 @@ export class VersionTreeProvider implements vscode.TreeDataProvider<VersionTreeI
             return versions.map((version, index) => {
                 const timeAgo = index + 1;
                 const promptText = timeAgo === 1 ? 'prompt' : 'prompts';
-                
-                const commitMatch = version.content.match(/\/\* Git commit: (.*?) \*\//);
-                let label: string;
-                
-                if (commitMatch) {
-                    label = `${commitMatch[1]}`;
-                } else {
-                    label = `${timeAgo} ${promptText} ago`;
-                }
+                const label = `${timeAgo} ${promptText} ago`;
 
                 const treeItem = new VersionTreeItem(
                     label,
