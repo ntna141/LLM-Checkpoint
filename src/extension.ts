@@ -56,7 +56,6 @@ async function handleGitCommit(workspacePath: string, repository: any, changedFi
 			const newContent = `/* Git commit: ${commitMessage} */\n${latestVersion.content.replace(/\/\* Git commit:.*\*\/\n/g, '')}`;
 
 			fileVersionDB.updateVersion(latestVersion.id, newContent, commitMessage);
-			versionTreeProvider.refresh(normalizedFilePath);
 			processedCount++;
 			
 			if (autoCleanup) {
@@ -64,13 +63,9 @@ async function handleGitCommit(workspacePath: string, repository: any, changedFi
 					fileVersionDB.deleteVersion(version.id);
 				}
 			}
-
-			
-			versionTreeProvider.refresh(normalizedFilePath);
 		}
 		
 		if (processedCount > 0) {
-			
 			versionTreeProvider.refresh();
 			
 			const message = autoCleanup 

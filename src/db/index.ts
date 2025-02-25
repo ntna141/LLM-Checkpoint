@@ -10,7 +10,7 @@ export class FileVersionDB {
 
     constructor(db: Database, context: vscode.ExtensionContext) {
         this.db = db;
-        this.dbPath = path.join(context.storageUri?.fsPath || context.globalStoragePath, 'file_versions.db');
+        this.dbPath = path.join(context.globalStorageUri.fsPath, 'file_versions.db');
     }
 
     private saveToFile() {
