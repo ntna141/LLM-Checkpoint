@@ -5,8 +5,8 @@ Quick Checkpoint is a VS Code extension that helps you use code history as conte
 ## Features
 
 <p align="center">
-  <img src="images/sidebar.png" alt="Sidebar" width="45%">
-  <img src="images/example.png" alt="Example" width="45%">
+  <img src="images/sidebar.png" alt="Sidebar" width="45%" height="250px">
+  <img src="images/example.png" alt="Example" width="45%" height="250px>"
 </p>
 
 ### Version Management
@@ -18,7 +18,7 @@ Quick Checkpoint is a VS Code extension that helps you use code history as conte
 ### Quick Actions
 - View, export, or delete specific versions
 - Quick clean to keep only latest versions
-- Append multiple versions to build context history
+- Append multiple versions to build context history (+ button)
 
 ![See Diff](images/diff.png)
 
