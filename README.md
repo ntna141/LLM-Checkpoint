@@ -4,6 +4,11 @@ Quick Checkpoint is a VS Code extension that helps you use code history as conte
 
 ## Features
 
+<p align="center">
+  <img src="images/sidebar.png" alt="Sidebar" width="45%">
+  <img src="images/example.png" alt="Example" width="45%">
+</p>
+
 ### Version Management
 - **Automatic Version Saving**: Automatically saves versions of your code as you make changes
 - **Smart Detection**: Only saves significant changes to avoid cluttering your history, automatically remove old versions on new commit
@@ -14,6 +19,8 @@ Quick Checkpoint is a VS Code extension that helps you use code history as conte
 - View, export, or delete specific versions
 - Quick clean to keep only latest versions
 - Append multiple versions to build context history
+
+![See Diff](images/diff.png)
 
 ### Context Management
 - Export versions to provide context to AI assistants
@@ -29,6 +36,8 @@ Quick Checkpoint is a VS Code extension that helps you use code history as conte
 ## Extension Settings
 
 This extension contributes the following settings:
+
+![Settings](images/settings.png)
 
 * `llmcheckpoint.showInfoMessages`: Enable/disable information messages for operations like saving, exporting, and deleting versions
 * `llmcheckpoint.autoCleanupAfterCommit`: Automatically cleanup versions after git commit, keeping only the latest version renamed with the commit message
