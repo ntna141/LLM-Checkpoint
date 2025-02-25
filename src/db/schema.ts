@@ -62,9 +62,18 @@ export async function initializeDatabase(context: vscode.ExtensionContext): Prom
     `);
 
     db.run(`
+        CREATE TABLE IF NOT EXISTS repository_commits (
+            repo_path TEXT PRIMARY KEY,
+            commit_hash TEXT NOT NULL,
+            timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    `);
+
+    db.run(`
         CREATE INDEX IF NOT EXISTS idx_files_path ON files(file_path);
         CREATE INDEX IF NOT EXISTS idx_versions_file_id ON versions(file_id);
         CREATE INDEX IF NOT EXISTS idx_versions_timestamp ON versions(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_repo_path ON repository_commits(repo_path);
     `);
 
     const data = db.export();
