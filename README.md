@@ -6,8 +6,8 @@ Try it here: [VS Code Marketplace](https://marketplace.visualstudio.com/items?it
 ## Features
 
 <p align="center">
-  <img src="images/sidebar.png" alt="Sidebar" height="550px">
-  <img src="images/example.png" alt="Example" height="550px>"
+  <img src="images/sidebar.png" alt="Sidebar" height="350px">
+  <img src="images/example.png" alt="Example" height="350px>"
 </p>
 
 ### Version Management
