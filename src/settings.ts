@@ -164,6 +164,10 @@ export class SettingsManager {
                 .checkbox-label {
                     font-size: 13px;
                 }
+                .save-button {
+                    display: none;
+                    margin-left: 8px;
+                }
             </style>
         </head>
         <body>
@@ -183,6 +187,7 @@ export class SettingsManager {
                 <div class="checkbox-container">
                     <input type="checkbox" id="saveAllChanges" ${saveAllChanges ? 'checked' : ''}>
                     <label for="saveAllChanges" class="checkbox-label">Save all changes (uncheck to save only multiline changes)</label>
+                    <button class="button save-button" onclick="handleSaveAllChanges()">Save</button>
                 </div>
                 <div class="checkbox-container">
                     <input type="checkbox" id="showInfoMessages" ${showInfoMessages ? 'checked' : ''}>
@@ -197,6 +202,9 @@ export class SettingsManager {
                     <label for="showTimestamps" class="checkbox-label">Show timestamps next to version entries</label>
                 </div>
                 <div class="button-container" style="margin-top: 24px;">
+                    <button class="button" id="saveAllSettings" style="background: var(--vscode-button-prominentBackground); color: var(--vscode-button-prominentForeground);">Save All Settings</button>
+                </div>
+                <div class="button-container" style="margin-top: 12px;">
                     <button class="button" onclick="handleQuickClean()">Quick Clean</button>
                     <button class="button" onclick="handleClearAll()">Clear All Versions</button>
                 </div>
@@ -224,32 +232,43 @@ export class SettingsManager {
                     vscode.postMessage({ command: 'clearAll' });
                 }
 
-                document.getElementById('saveAllChanges').addEventListener('change', (event) => {
+                function handleSaveAllSettings() {
                     vscode.postMessage({
-                        command: 'updateSaveAllChanges',
-                        value: event.target.checked
+                        command: 'saveAllSettings',
+                        settings: {
+                            path: document.getElementById('pathInput').value,
+                            saveAllChanges: document.getElementById('saveAllChanges').checked,
+                            showInfoMessages: document.getElementById('showInfoMessages').checked,
+                            autoCleanupAfterCommit: document.getElementById('autoCleanupAfterCommit').checked,
+                            showTimestamps: document.getElementById('showTimestamps').checked
+                        }
                     });
+                }
+
+                document.getElementById('saveAllSettings').addEventListener('click', handleSaveAllSettings);
+
+                document.getElementById('saveAllChanges').addEventListener('change', (event) => {
+                    event.target.nextElementSibling.nextElementSibling.style.display = 'block';
                 });
 
-                document.getElementById('showInfoMessages').addEventListener('change', (event) => {
+                function handleSaveAllChanges() {
                     vscode.postMessage({
-                        command: 'updateShowInfoMessages',
-                        value: event.target.checked
+                        command: 'updateSaveAllChanges',
+                        value: document.getElementById('saveAllChanges').checked
                     });
+                    document.querySelector('#saveAllChanges + label + button').style.display = 'none';
+                }
+
+                document.getElementById('showInfoMessages').addEventListener('change', (event) => {
+                    // No immediate save
                 });
 
                 document.getElementById('autoCleanupAfterCommit').addEventListener('change', (event) => {
-                    vscode.postMessage({
-                        command: 'updateAutoCleanupAfterCommit',
-                        value: event.target.checked
-                    });
+                    // No immediate save
                 });
 
                 document.getElementById('showTimestamps').addEventListener('change', (event) => {
-                    vscode.postMessage({
-                        command: 'updateShowTimestamps',
-                        value: event.target.checked
-                    });
+                    // No immediate save
                 });
 
                 window.addEventListener('message', event => {
@@ -305,6 +324,9 @@ export class SettingsManager {
                         break;
                     case 'updateShowTimestamps':
                         await this.setShowTimestamps(message.value);
+                        break;
+                    case 'saveAllSettings':
+                        await this.saveAllSettings(message.settings);
                         break;
                     case 'quickClean':
                         await vscode.commands.executeCommand('llmcheckpoint.quickClean');
@@ -439,5 +461,21 @@ export class SettingsManager {
             const defaultPath = path.join('', path.basename(inputPath) || 'history_context.txt');
             await this.setHistoryPath(defaultPath);
         }
+    }
+
+    async saveAllSettings(settings: {
+        path: string;
+        saveAllChanges: boolean;
+        showInfoMessages: boolean;
+        autoCleanupAfterCommit: boolean;
+        showTimestamps: boolean;
+    }): Promise<void> {
+        await this.validateAndUpdatePath(settings.path);
+        await this.setSaveAllChanges(settings.saveAllChanges);
+        await this.setShowInfoMessages(settings.showInfoMessages);
+        await this.setAutoCleanupAfterCommit(settings.autoCleanupAfterCommit);
+        await this.setShowTimestamps(settings.showTimestamps);
+        
+        vscode.window.showInformationMessage('All settings saved successfully');
     }
 } 
