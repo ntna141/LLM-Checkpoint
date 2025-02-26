@@ -10,7 +10,9 @@ export class FileVersionDB {
 
     constructor(db: Database, context: vscode.ExtensionContext) {
         this.db = db;
-        this.dbPath = path.join(context.globalStorageUri.fsPath, 'file_versions.db');
+        const workspaceId = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || 'default';
+        const workspaceHash = Buffer.from(workspaceId).toString('base64');
+        this.dbPath = path.join(context.globalStorageUri.fsPath, `file_versions.${workspaceHash}.db`);
     }
 
     private async ensureDirectory() {

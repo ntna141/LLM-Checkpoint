@@ -23,7 +23,6 @@ export async function initializeDatabase(context: vscode.ExtensionContext): Prom
         throw new Error('Global storage URI is not available');
     }
     
-    // Get workspace folder path or use a default identifier
     const workspaceId = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || 'default';
     const workspaceHash = Buffer.from(workspaceId).toString('base64');
     

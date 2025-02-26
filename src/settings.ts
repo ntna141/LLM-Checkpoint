@@ -124,18 +124,16 @@ export class SettingsManager {
                     border-color: var(--vscode-focusBorder);
                 }
                 .button {
-                    background: var(--vscode-button-background);
-                    color: var(--vscode-button-foreground);
-                    border: none;
-                    padding: 4px 8px;
+                    padding: 4px 12px;
                     border-radius: 2px;
+                    border: none;
                     cursor: pointer;
-                    font-size: 12px;
-                    white-space: nowrap;
-                    align-self: flex-start;
+                    background: #007acc;
+                    color: white;
                 }
-                .button:hover {
-                    background: var(--vscode-button-hoverBackground);
+                .button:disabled {
+                    opacity: 0.5;
+                    cursor: default;
                 }
                 .button-container {
                     display: flex;
@@ -184,29 +182,35 @@ export class SettingsManager {
                     </div>
                     <div class="error" id="pathError"></div>
                 </div>
-                <div class="checkbox-container">
+                <div class="setting">
                     <input type="checkbox" id="saveAllChanges" ${saveAllChanges ? 'checked' : ''}>
-                    <label for="saveAllChanges" class="checkbox-label">Save all changes (uncheck to save only multiline changes)</label>
-                    <button class="button save-button" onclick="handleSaveAllChanges()">Save</button>
+                    <label for="saveAllChanges">Save all changes when committing</label>
                 </div>
-                <div class="checkbox-container">
+                <div class="setting">
                     <input type="checkbox" id="showInfoMessages" ${showInfoMessages ? 'checked' : ''}>
-                    <label for="showInfoMessages" class="checkbox-label">Show information messages</label>
+                    <label for="showInfoMessages">Show info messages</label>
                 </div>
-                <div class="checkbox-container">
+                <div class="setting">
                     <input type="checkbox" id="autoCleanupAfterCommit" ${autoCleanupAfterCommit ? 'checked' : ''}>
-                    <label for="autoCleanupAfterCommit" class="checkbox-label">Auto-cleanup versions after git commit (keeps latest version with commit message)</label>
+                    <label for="autoCleanupAfterCommit">Auto-cleanup versions after git commit (keeps latest version with commit message)</label>
                 </div>
-                <div class="checkbox-container">
+                <div class="setting">
                     <input type="checkbox" id="showTimestamps" ${showTimestamps ? 'checked' : ''}>
-                    <label for="showTimestamps" class="checkbox-label">Show timestamps next to version entries</label>
+                    <label for="showTimestamps">Show timestamps next to version entries</label>
                 </div>
                 <div class="button-container" style="margin-top: 24px;">
-                    <button class="button" id="saveAllSettings" style="background: var(--vscode-button-prominentBackground); color: var(--vscode-button-prominentForeground);">Save All Settings</button>
+                    <button class="button" id="saveAllSettings" disabled 
+                        onclick="handleSaveAllSettings()">
+                        Save All Settings
+                    </button>
                 </div>
                 <div class="button-container" style="margin-top: 12px;">
-                    <button class="button" onclick="handleQuickClean()">Quick Clean</button>
-                    <button class="button" onclick="handleClearAll()">Clear All Versions</button>
+                    <button class="button" onclick="handleQuickClean()">
+                        Quick Clean
+                    </button>
+                    <button class="button" onclick="handleClearAll()">
+                        Clear All Versions
+                    </button>
                 </div>
             </div>
             <script>
@@ -236,28 +240,21 @@ export class SettingsManager {
                     vscode.postMessage({
                         command: 'saveAllSettings',
                         settings: {
-                            path: document.getElementById('pathInput').value,
                             saveAllChanges: document.getElementById('saveAllChanges').checked,
                             showInfoMessages: document.getElementById('showInfoMessages').checked,
                             autoCleanupAfterCommit: document.getElementById('autoCleanupAfterCommit').checked,
                             showTimestamps: document.getElementById('showTimestamps').checked
                         }
                     });
+                    document.getElementById('saveAllSettings').disabled = true;
                 }
 
-                document.getElementById('saveAllSettings').addEventListener('click', handleSaveAllSettings);
-
-                document.getElementById('saveAllChanges').addEventListener('change', (event) => {
-                    event.target.nextElementSibling.nextElementSibling.style.display = 'block';
-                });
-
-                function handleSaveAllChanges() {
-                    vscode.postMessage({
-                        command: 'updateSaveAllChanges',
-                        value: document.getElementById('saveAllChanges').checked
+                // Add change listeners to enable the Save All Settings button
+                ['saveAllChanges', 'showInfoMessages', 'autoCleanupAfterCommit', 'showTimestamps'].forEach(id => {
+                    document.getElementById(id).addEventListener('change', () => {
+                        document.getElementById('saveAllSettings').disabled = false;
                     });
-                    document.querySelector('#saveAllChanges + label + button').style.display = 'none';
-                }
+                });
 
                 document.getElementById('showInfoMessages').addEventListener('change', (event) => {
                     // No immediate save
@@ -464,18 +461,16 @@ export class SettingsManager {
     }
 
     async saveAllSettings(settings: {
-        path: string;
         saveAllChanges: boolean;
         showInfoMessages: boolean;
         autoCleanupAfterCommit: boolean;
         showTimestamps: boolean;
     }): Promise<void> {
-        await this.validateAndUpdatePath(settings.path);
         await this.setSaveAllChanges(settings.saveAllChanges);
         await this.setShowInfoMessages(settings.showInfoMessages);
         await this.setAutoCleanupAfterCommit(settings.autoCleanupAfterCommit);
         await this.setShowTimestamps(settings.showTimestamps);
         
-        vscode.window.showInformationMessage('All settings saved successfully');
+        vscode.window.showInformationMessage('Settings saved successfully');
     }
 } 
