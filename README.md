@@ -84,3 +84,5 @@ Please report any issues on our [GitHub repository](https://github.com/ntna141/Q
 ## Contributing
 
 Found a bug or have a feature request? Please open an issue on our [GitHub repository](https://github.com/ntna141/Quick-Checkpoint).
+
+Talk to me on my [Twitter](https://x.com/ntna_dev)
